@@ -4,6 +4,23 @@
 -- ============================================================
 
 -- ══════════════════════════════════════════════════════════════
+-- DROP existing tables (safe re-run)
+-- ══════════════════════════════════════════════════════════════
+
+DROP TABLE IF EXISTS file_uploads CASCADE;
+DROP TABLE IF EXISTS payroll CASCADE;
+DROP TABLE IF EXISTS amex_transactions CASCADE;
+DROP TABLE IF EXISTS bank_transactions CASCADE;
+DROP TABLE IF EXISTS sales_by_category CASCADE;
+DROP TABLE IF EXISTS expense_lines CASCADE;
+DROP TABLE IF EXISTS revenue_lines CASCADE;
+DROP TABLE IF EXISTS monthly_summary CASCADE;
+DROP TABLE IF EXISTS user_clients CASCADE;
+DROP TABLE IF EXISTS clients CASCADE;
+DROP FUNCTION IF EXISTS user_has_client_access(UUID) CASCADE;
+DROP FUNCTION IF EXISTS update_updated_at() CASCADE;
+
+-- ══════════════════════════════════════════════════════════════
 -- 0. CLIENTS & USER MAPPING
 -- ══════════════════════════════════════════════════════════════
 
