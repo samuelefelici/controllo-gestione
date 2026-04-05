@@ -15,6 +15,7 @@ DROP TABLE IF EXISTS sales_by_category CASCADE;
 DROP TABLE IF EXISTS expense_lines CASCADE;
 DROP TABLE IF EXISTS revenue_lines CASCADE;
 DROP TABLE IF EXISTS monthly_summary CASCADE;
+DROP TABLE IF EXISTS import_batches CASCADE;
 DROP TABLE IF EXISTS user_clients CASCADE;
 DROP TABLE IF EXISTS clients CASCADE;
 DROP FUNCTION IF EXISTS user_has_client_access(UUID) CASCADE;
@@ -40,6 +41,22 @@ CREATE TABLE user_clients (
   role TEXT NOT NULL DEFAULT 'editor',
   created_at TIMESTAMPTZ DEFAULT now(),
   PRIMARY KEY (user_id, client_id)
+);
+
+-- ══════════════════════════════════════════════════════════════
+-- 0b. IMPORT BATCHES (for undo / audit trail)
+-- ══════════════════════════════════════════════════════════════
+
+CREATE TABLE import_batches (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  file_type TEXT NOT NULL,
+  filename TEXT NOT NULL,
+  period TEXT,
+  rows_imported INT DEFAULT 0,
+  imported_by UUID REFERENCES auth.users(id),
+  imported_at TIMESTAMPTZ DEFAULT now(),
+  undone_at TIMESTAMPTZ
 );
 
 -- ══════════════════════════════════════════════════════════════
@@ -100,7 +117,9 @@ CREATE TABLE expense_lines (
 CREATE TABLE sales_by_category (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  import_batch_id UUID REFERENCES import_batches(id) ON DELETE CASCADE,
   period TEXT NOT NULL,
+  rank INT DEFAULT 0,
   category_name TEXT NOT NULL,
   sold_quantity INT DEFAULT 0,
   net_sales NUMERIC(12,2) DEFAULT 0,
@@ -110,9 +129,11 @@ CREATE TABLE sales_by_category (
   discount_pct NUMERIC(5,2) DEFAULT 0,
   purchase_value NUMERIC(12,2) DEFAULT 0,
   sales_profit NUMERIC(12,2) DEFAULT 0,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  UNIQUE(client_id, period, category_name)
+  created_at TIMESTAMPTZ DEFAULT now()
 );
+
+CREATE INDEX idx_sales_batch ON sales_by_category(import_batch_id);
+CREATE INDEX idx_sales_client_period ON sales_by_category(client_id, period);
 
 -- ══════════════════════════════════════════════════════════════
 -- 5. Bank transactions
@@ -235,6 +256,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_clients ENABLE ROW LEVEL SECURITY;
+ALTER TABLE import_batches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE monthly_summary ENABLE ROW LEVEL SECURITY;
 ALTER TABLE revenue_lines ENABLE ROW LEVEL SECURITY;
 ALTER TABLE expense_lines ENABLE ROW LEVEL SECURITY;
@@ -251,6 +273,7 @@ CREATE POLICY "Users see own memberships" ON user_clients
   FOR SELECT USING (user_id = auth.uid());
 
 CREATE POLICY "Client data access" ON monthly_summary FOR ALL USING (user_has_client_access(client_id));
+CREATE POLICY "Client data access" ON import_batches FOR ALL USING (user_has_client_access(client_id));
 CREATE POLICY "Client data access" ON revenue_lines FOR ALL USING (user_has_client_access(client_id));
 CREATE POLICY "Client data access" ON expense_lines FOR ALL USING (user_has_client_access(client_id));
 CREATE POLICY "Client data access" ON sales_by_category FOR ALL USING (user_has_client_access(client_id));

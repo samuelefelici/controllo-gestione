@@ -29,6 +29,20 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ uploads: uploads || [] });
   }
 
+  // If only batches section requested (import history)
+  if (section === "batches") {
+    const { data: batches, error } = await sb
+      .from("import_batches")
+      .select("*")
+      .eq("client_id", clientId)
+      .order("imported_at", { ascending: false })
+      .limit(50);
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    return NextResponse.json({ batches: batches || [] });
+  }
+
   // If no period, get the latest for this client
   if (!period) {
     const { data: latest } = await sb
