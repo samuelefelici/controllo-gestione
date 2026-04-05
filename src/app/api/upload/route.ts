@@ -21,9 +21,14 @@ export async function POST(request: NextRequest) {
     const file = formData.get("file") as File;
     const fileType = formData.get("type") as FileType;
     const periodOverride = formData.get("period") as string | null;
+    const clientId = formData.get("client_id") as string | null;
 
     if (!file || !fileType) {
       return NextResponse.json({ error: "Missing file or type" }, { status: 400 });
+    }
+
+    if (!clientId) {
+      return NextResponse.json({ error: "Missing client_id" }, { status: 400 });
     }
 
     const validTypes: FileType[] = ["sales_by_category", "bank_movements", "amex_statement", "payroll"];
@@ -35,8 +40,8 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer());
     const filename = file.name;
 
-    // 1. Upload file to Supabase Storage
-    const storagePath = `${fileType}/${Date.now()}_${filename}`;
+    // 1. Upload file to Supabase Storage (organized by client)
+    const storagePath = `clients/${clientId}/${fileType}/${Date.now()}_${filename}`;
     const { error: uploadError } = await sb.storage
       .from("documents")
       .upload(storagePath, buffer, { contentType: file.type });
@@ -48,6 +53,7 @@ export async function POST(request: NextRequest) {
 
     // 2. Track upload
     const { data: uploadRecord } = await sb.from("file_uploads").insert({
+      client_id: clientId,
       filename,
       file_type: fileType,
       storage_path: storagePath,
@@ -68,6 +74,7 @@ export async function POST(request: NextRequest) {
           // Upsert into sales_by_category table
           for (const row of parsed.rows) {
             await sb.from("sales_by_category").upsert({
+              client_id: clientId,
               period,
               category_name: row.category_name,
               sold_quantity: row.sold_quantity,
@@ -76,7 +83,7 @@ export async function POST(request: NextRequest) {
               sales_with_vat: row.sales_with_vat,
               net_discount: row.net_discount,
               discount_pct: row.discount_pct,
-            }, { onConflict: "period,category_name" });
+            }, { onConflict: "client_id,period,category_name" });
           }
           rowsImported = parsed.rows.length;
           result = { period, categories: parsed.rows.length, totals: parsed.totals };
@@ -87,8 +94,8 @@ export async function POST(request: NextRequest) {
           const parsed = await parseBankMovementsXLS(buffer);
           period = period || parsed.period;
 
-          // Delete existing transactions for this period, then insert
-          await sb.from("bank_transactions").delete().eq("period", period);
+          // Delete existing transactions for this period and client, then insert
+          await sb.from("bank_transactions").delete().eq("period", period).eq("client_id", clientId);
 
           // Insert in batches of 50
           const batches = [];
@@ -97,7 +104,7 @@ export async function POST(request: NextRequest) {
           }
           for (const batch of batches) {
             await sb.from("bank_transactions").insert(
-              batch.map((tx) => ({ ...tx, period }))
+              batch.map((tx) => ({ ...tx, period, client_id: clientId }))
             );
           }
           rowsImported = parsed.transactions.length;
@@ -117,8 +124,8 @@ export async function POST(request: NextRequest) {
           for (const [source, amount] of [["wu", commWU], ["ria", commRIA], ["mg", commMG]] as const) {
             if (amount > 0) {
               await sb.from("revenue_lines").upsert(
-                { period, source, amount, notes: "Auto-parsed from bank movements" },
-                { onConflict: "period,source" }
+                { client_id: clientId, period, source, amount, notes: "Auto-parsed from bank movements" },
+                { onConflict: "client_id,period,source" }
               );
             }
           }
@@ -131,10 +138,10 @@ export async function POST(request: NextRequest) {
           const parsed = await parseAmexStatement(buffer);
           period = period || parsed.period;
 
-          await sb.from("amex_transactions").delete().eq("period", period);
+          await sb.from("amex_transactions").delete().eq("period", period).eq("client_id", clientId);
           if (parsed.transactions.length > 0) {
             await sb.from("amex_transactions").insert(
-              parsed.transactions.map((tx) => ({ ...tx, period }))
+              parsed.transactions.map((tx) => ({ ...tx, period, client_id: clientId }))
             );
           }
           rowsImported = parsed.transactions.length;
@@ -148,6 +155,7 @@ export async function POST(request: NextRequest) {
 
           for (const rec of parsed.records) {
             await sb.from("payroll").upsert({
+              client_id: clientId,
               period,
               employee_code: rec.employee_code,
               employee_name: rec.employee_name,
@@ -164,7 +172,7 @@ export async function POST(request: NextRequest) {
               additional_regional: rec.additional_regional,
               additional_municipal: rec.additional_municipal,
               total_deductions: rec.total_deductions,
-            }, { onConflict: "period,employee_name" });
+            }, { onConflict: "client_id,period,employee_name" });
           }
           rowsImported = parsed.records.length;
 
@@ -172,8 +180,8 @@ export async function POST(request: NextRequest) {
           const totalLordo = parsed.records.reduce((s, r) => s + r.gross_pay, 0);
           const totalTfr = parsed.records.reduce((s, r) => s + r.tfr_month, 0);
           await sb.from("expense_lines").upsert(
-            { period, category: "stipendi", amount: totalLordo + totalTfr, notes: `Lordo ${totalLordo.toFixed(2)} + TFR ${totalTfr.toFixed(2)}` },
-            { onConflict: "period,category" }
+            { client_id: clientId, period, category: "stipendi", amount: totalLordo + totalTfr, notes: `Lordo ${totalLordo.toFixed(2)} + TFR ${totalTfr.toFixed(2)}` },
+            { onConflict: "client_id,period,category" }
           );
 
           result = { period, employees: rowsImported, total_gross: totalLordo, total_tfr: totalTfr };
@@ -191,15 +199,16 @@ export async function POST(request: NextRequest) {
 
       // 5. Ensure monthly_summary exists
       await sb.from("monthly_summary").upsert({
+        client_id: clientId,
         period,
         year: parseInt(period.split("-")[0]),
         month: parseInt(period.split("-")[1]),
-      }, { onConflict: "period" });
+      }, { onConflict: "client_id,period" });
 
       // 6. Auto-recalculate monthly summary
       try {
         const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-        await fetch(`${baseUrl}/api/parse/recalculate?period=${period}`, { method: "POST" });
+        await fetch(`${baseUrl}/api/parse/recalculate?period=${period}&client_id=${clientId}`, { method: "POST" });
       } catch (recalcErr) {
         console.warn("Auto-recalculate failed (non-blocking):", recalcErr);
       }

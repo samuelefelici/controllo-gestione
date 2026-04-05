@@ -11,12 +11,17 @@ export async function POST(request: NextRequest) {
   const sb = getServiceSupabase();
   const { searchParams } = new URL(request.url);
   const period = searchParams.get("period");
+  const clientId = searchParams.get("client_id");
 
   if (!period) {
     return NextResponse.json({ error: "Missing period param" }, { status: 400 });
   }
 
-  // 1. Fetch all data for this period
+  if (!clientId) {
+    return NextResponse.json({ error: "Missing client_id param" }, { status: 400 });
+  }
+
+  // 1. Fetch all data for this period and client
   const [
     { data: revenues },
     { data: expenses },
@@ -25,12 +30,12 @@ export async function POST(request: NextRequest) {
     { data: bankTx },
     { data: amexTx },
   ] = await Promise.all([
-    sb.from("revenue_lines").select("*").eq("period", period),
-    sb.from("expense_lines").select("*").eq("period", period),
-    sb.from("sales_by_category").select("*").eq("period", period),
-    sb.from("payroll").select("*").eq("period", period),
-    sb.from("bank_transactions").select("*").eq("period", period),
-    sb.from("amex_transactions").select("*").eq("period", period),
+    sb.from("revenue_lines").select("*").eq("client_id", clientId).eq("period", period),
+    sb.from("expense_lines").select("*").eq("client_id", clientId).eq("period", period),
+    sb.from("sales_by_category").select("*").eq("client_id", clientId).eq("period", period),
+    sb.from("payroll").select("*").eq("client_id", clientId).eq("period", period),
+    sb.from("bank_transactions").select("*").eq("client_id", clientId).eq("period", period),
+    sb.from("amex_transactions").select("*").eq("client_id", clientId).eq("period", period),
   ]);
 
   // ═══════════════════════════════════════════════════════
@@ -103,8 +108,8 @@ export async function POST(request: NextRequest) {
 
   for (const line of revenueLines) {
     await sb.from("revenue_lines").upsert(
-      { period, ...line },
-      { onConflict: "period,source" }
+      { client_id: clientId, period, ...line },
+      { onConflict: "client_id,period,source" }
     );
   }
 
@@ -189,8 +194,8 @@ export async function POST(request: NextRequest) {
 
   for (const line of expenseLines) {
     await sb.from("expense_lines").upsert(
-      { period, ...line },
-      { onConflict: "period,category" }
+      { client_id: clientId, period, ...line },
+      { onConflict: "client_id,period,category" }
     );
   }
 
@@ -204,6 +209,7 @@ export async function POST(request: NextRequest) {
   const ivaPOS = (sales || []).reduce((s, c) => s + (c.vat_amount || 0), 0);
 
   await sb.from("monthly_summary").upsert({
+    client_id: clientId,
     period,
     year: parseInt(period.split("-")[0]),
     month: parseInt(period.split("-")[1]),
@@ -212,7 +218,7 @@ export async function POST(request: NextRequest) {
     net_profit: netProfit,
     iva_pos: ivaPOS,
     notes: `Auto-calculated. Product margin: ${productProfitMethod}. Revenue lines: ${revenueLines.length}. Expense lines: ${expenseLines.length}.`,
-  }, { onConflict: "period" });
+  }, { onConflict: "client_id,period" });
 
   return NextResponse.json({
     success: true,

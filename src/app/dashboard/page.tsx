@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   LineChart, Line, PieChart, Pie, Cell, CartesianGrid, Legend,
@@ -36,20 +37,35 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export default function DashboardPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">Caricamento dashboard…</div>}>
+      <DashboardContent />
+    </Suspense>
+  );
+}
+
+function DashboardContent() {
+  const searchParams = useSearchParams();
+  const clientId = searchParams.get("client_id") || "";
+
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState("");
   const [tab, setTab] = useState("overview");
 
   useEffect(() => {
-    const url = period ? `/api/data?period=${period}` : "/api/data";
+    if (!clientId) return;
+    const params = new URLSearchParams();
+    params.set("client_id", clientId);
+    if (period) params.set("period", period);
+    const url = `/api/data?${params.toString()}`;
     setLoading(true);
     fetch(url)
       .then((r) => r.json())
       .then((d) => { setData(d); if (!period && d.period) setPeriod(d.period); })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [period]);
+  }, [period, clientId]);
 
   const salesData = useMemo(() => {
     if (!data?.sales?.data) return [];
@@ -105,7 +121,7 @@ export default function DashboardPage() {
       <div className="min-h-screen flex items-center justify-center bg-slate-950">
         <div className="text-center">
           <p className="text-xl text-slate-400 mb-4">Nessun dato disponibile</p>
-          <Link href="/" className="text-sky-500 hover:text-sky-400 text-sm">← Torna all&apos;upload</Link>
+          <Link href={`/admin/${clientId}`} className="text-sky-500 hover:text-sky-400 text-sm">← Torna alla gestione</Link>
         </div>
       </div>
     );
@@ -129,7 +145,7 @@ export default function DashboardPage() {
       <header className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Link href="/" className="w-9 h-9 rounded-lg bg-gradient-to-br from-sky-500 to-indigo-500 flex items-center justify-center text-white font-bold text-sm">SW</Link>
+            <Link href="/admin" className="w-9 h-9 rounded-lg bg-gradient-to-br from-sky-500 to-indigo-500 flex items-center justify-center text-white font-bold text-sm">FF</Link>
             <div>
               <h1 className="text-lg font-bold text-white">Dashboard</h1>
               <p className="text-[10px] text-slate-500">Smart World SRLS</p>
@@ -147,7 +163,7 @@ export default function DashboardPage() {
                 </option>
               ))}
             </select>
-            <Link href="/" className="text-xs text-slate-500 hover:text-sky-400">+ Carica file</Link>
+            <Link href={`/admin/${clientId}`} className="text-xs text-slate-500 hover:text-sky-400">+ Carica file</Link>
           </div>
         </div>
         <div className="max-w-7xl mx-auto px-6 flex gap-1 pb-2 overflow-x-auto">

@@ -11,12 +11,30 @@ export async function GET(request: NextRequest) {
   const sb = getServiceSupabase();
   const { searchParams } = new URL(request.url);
   let period = searchParams.get("period");
+  const clientId = searchParams.get("client_id");
+  const section = searchParams.get("section");
 
-  // If no period, get the latest
+  if (!clientId) {
+    return NextResponse.json({ error: "Missing client_id" }, { status: 400 });
+  }
+
+  // If only uploads section requested
+  if (section === "uploads") {
+    const { data: uploads } = await sb
+      .from("file_uploads")
+      .select("*")
+      .eq("client_id", clientId)
+      .order("uploaded_at", { ascending: false })
+      .limit(20);
+    return NextResponse.json({ uploads: uploads || [] });
+  }
+
+  // If no period, get the latest for this client
   if (!period) {
     const { data: latest } = await sb
       .from("monthly_summary")
       .select("period")
+      .eq("client_id", clientId)
       .order("period", { ascending: false })
       .limit(1)
       .single();
@@ -27,7 +45,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "No data available" }, { status: 404 });
   }
 
-  // Fetch all data in parallel
+  // Fetch all data in parallel (scoped to client)
   const [
     { data: summary },
     { data: sales },
@@ -40,18 +58,16 @@ export async function GET(request: NextRequest) {
     { data: allRevenues },
     { data: uploads },
   ] = await Promise.all([
-    sb.from("monthly_summary").select("*").eq("period", period).single(),
-    sb.from("sales_by_category").select("*").eq("period", period).order("net_sales", { ascending: false }),
-    sb.from("revenue_lines").select("*").eq("period", period),
-    sb.from("expense_lines").select("*").eq("period", period),
-    sb.from("payroll").select("*").eq("period", period),
-    sb.from("bank_transactions").select("*").eq("period", period).order("transaction_date", { ascending: false }),
-    sb.from("amex_transactions").select("*").eq("period", period).order("operation_date", { ascending: false }),
-    // Historical data for trends
-    sb.from("monthly_summary").select("*").order("period", { ascending: true }).limit(24),
-    sb.from("revenue_lines").select("*").order("period", { ascending: true }),
-    // Recent uploads
-    sb.from("file_uploads").select("*").order("uploaded_at", { ascending: false }).limit(20),
+    sb.from("monthly_summary").select("*").eq("client_id", clientId).eq("period", period).single(),
+    sb.from("sales_by_category").select("*").eq("client_id", clientId).eq("period", period).order("net_sales", { ascending: false }),
+    sb.from("revenue_lines").select("*").eq("client_id", clientId).eq("period", period),
+    sb.from("expense_lines").select("*").eq("client_id", clientId).eq("period", period),
+    sb.from("payroll").select("*").eq("client_id", clientId).eq("period", period),
+    sb.from("bank_transactions").select("*").eq("client_id", clientId).eq("period", period).order("transaction_date", { ascending: false }),
+    sb.from("amex_transactions").select("*").eq("client_id", clientId).eq("period", period).order("operation_date", { ascending: false }),
+    sb.from("monthly_summary").select("*").eq("client_id", clientId).order("period", { ascending: true }).limit(24),
+    sb.from("revenue_lines").select("*").eq("client_id", clientId).order("period", { ascending: true }),
+    sb.from("file_uploads").select("*").eq("client_id", clientId).order("uploaded_at", { ascending: false }).limit(20),
   ]);
 
   // Compute aggregates from bank transactions
