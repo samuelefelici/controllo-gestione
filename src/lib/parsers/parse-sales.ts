@@ -44,7 +44,7 @@ export async function parseSalesByCategory(buffer: Buffer): Promise<SalesCategor
     period = `${year}-${month}`;
   }
 
-  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  const lines = text.split("\n").map((l: string) => l.trim()).filter(Boolean);
   const rows: SalesCategoryRow[] = [];
 
   // Pattern: number NAME numbers...
@@ -67,7 +67,7 @@ export async function parseSalesByCategory(buffer: Buffer): Promise<SalesCategor
       if (!name || name === "Name") continue;
 
       // Parse remaining numeric fields
-      const nums = parts.slice(2).map((s) =>
+      const nums = parts.slice(2).map((s: string) =>
         parseFloat(s.replace(/[€%\s]/g, "").replace(/\./g, "").replace(",", "."))
       );
 

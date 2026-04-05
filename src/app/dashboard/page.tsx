@@ -73,8 +73,17 @@ export default function DashboardPage() {
 
   const revenuePie = useMemo(() => {
     if (!data?.revenues) return [];
+    const revenueNameMap: Record<string, string> = {
+      wu: "Western Union",
+      ria: "RIA",
+      mg: "MoneyGram",
+      prodotti: "Prodotti",
+      ticket: "Biglietteria",
+      riparazioni: "Riparazioni",
+    };
+
     return data.revenues.map((r: any, i: number) => ({
-      name: { wu: "Western Union", ria: "RIA", mg: "MoneyGram", prodotti: "Prodotti", ticket: "Biglietteria", riparazioni: "Riparazioni" }[r.source] || r.source,
+      name: revenueNameMap[r.source] || r.source,
       value: r.amount,
       color: COLORS[i % COLORS.length],
     }));
