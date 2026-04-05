@@ -1,14 +1,17 @@
-import pdf from "pdf-parse";
+import pdfParse from "pdf-parse";
+
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface AmexTransaction {
-  operation_date: string;
-  booking_date: string;
-  description: string;
-  amount_eur: number;
-  amount_foreign: number | null;
-  currency_foreign: string | null;
-  exchange_rate: number | null;
-  category: string;
+  operation_date: string;   // YYYY-MM-DD
+  booking_date: string;     // YYYY-MM-DD
+  description: string;      // descrizione completa
+  amount_eur: number;       // importo EUR (positivo = spesa, negativo = accredito)
+  category: string;         // SPESA | QUOTA | BOLLO | PAGAMENTO_CC
+  merchant: string;         // nome pulito merchant
+  location: string | null;  // città/paese
+  is_credit: boolean;       // true se accredito
+  rank?: number;
 }
 
 export interface AmexResult {
@@ -19,121 +22,218 @@ export interface AmexResult {
   new_charges: number;
   credits: number;
   current_balance: number;
-  amount_due: number;
   transactions: AmexTransaction[];
 }
 
-function categorizeAmex(desc: string): string {
-  const d = desc.toUpperCase();
-  if (d.includes("BALUWO")) return "baluwo";
-  if (d.includes("FACEBK") || d.includes("FACEBOOK")) return "advertising";
-  if (d.includes("AMZN") || d.includes("AMAZON")) return "supply_amazon";
-  if (d.includes("MICROSOFT")) return "subscription";
-  if (d.includes("BUBLUP")) return "subscription";
-  if (d.includes("SHOPIFY")) return "subscription";
-  if (d.includes("AMZSCOUT")) return "subscription";
-  if (d.includes("BRICOBRAVO")) return "supply";
-  if (d.includes("WIZZ AIR") || d.includes("RYANAIR") || d.includes("EASYJET")) return "travel";
-  if (d.includes("FASTWEB")) return "internet";
-  if (d.includes("QUOTA ASSOCIATIVA")) return "amex_fee";
-  if (d.includes("IMPOSTA DI BOLLO")) return "tax";
-  if (d.includes("ADDEBITO IN C/C")) return "payment";
-  if (d.includes("PARIS SUPER MARKET") || d.includes("WOODEN STORE")) return "personal";
-  return "other";
+// ─── Regex ───────────────────────────────────────────────────────────────────
+
+/** Riga transazione AMEX: DD.MM.YYDD.MM.YY<descrizione> */
+const TX_LINE_RE = /^(\d{2}\.\d{2}\.\d{2})(\d{2}\.\d{2}\.\d{2})(.+)$/;
+
+/** Importo EUR standalone: "100,00" o "3.402,00" */
+const AMOUNT_RE = /^[\d.]+,\d{2}$/;
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/** DD.MM.YY → YYYY-MM-DD */
+function parseDate(ddmmyy: string): string {
+  const d = ddmmyy.slice(0, 2);
+  const m = ddmmyy.slice(3, 5);
+  const yy = ddmmyy.slice(6, 8);
+  const yyyy = parseInt(yy) > 50 ? `19${yy}` : `20${yy}`;
+  return `${yyyy}-${m}-${d}`;
 }
 
-function parseItalianDate(dateStr: string): string {
-  // DD.MM.YY -> YYYY-MM-DD
-  const parts = dateStr.split(".");
-  if (parts.length !== 3) return "";
-  const year = parseInt(parts[2]) < 50 ? `20${parts[2]}` : `19${parts[2]}`;
-  return `${year}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
+/** "1.052,69" → 1052.69 */
+function parseImporto(raw: string): number {
+  return parseFloat(raw.replace(/\./g, "").replace(",", "."));
 }
 
-export async function parseAmexStatement(buffer: Buffer): Promise<AmexResult> {
-  const data = await pdf(buffer);
-  const text = data.text;
-
-  // Extract statement period
-  const periodMatch = text.match(/Operazioni contabilizzate nel periodo\s*(\d{2}\.\d{2}\.\d{4})\s*-\s*(\d{2}\.\d{2}\.\d{4})/);
-  const startDate = periodMatch?.[1]?.replace(/\./g, "/") || "";
-  const endDate = periodMatch?.[2]?.replace(/\./g, "/") || "";
-
-  // Derive period from end date
-  let period = "";
-  if (periodMatch) {
-    const parts = periodMatch[2].split(".");
-    period = `${parts[2]}-${parts[1]}`;
+function cleanDescription(raw: string): {
+  merchant: string;
+  location: string | null;
+} {
+  const trimmed = raw.trim();
+  // Split on multiple spaces to separate merchant from location
+  const parts = trimmed.split(/\s{2,}/);
+  if (parts.length >= 2) {
+    return {
+      merchant: parts[0].trim(),
+      location: parts.slice(1).join(" ").trim() || null,
+    };
   }
+  return { merchant: trimmed, location: null };
+}
 
-  // Extract balance info
-  const parseNum = (pattern: RegExp): number => {
-    const match = text.match(pattern);
-    if (!match) return 0;
-    return parseFloat(match[1].replace(/\./g, "").replace(",", "."));
-  };
+function categorize(desc: string, isCredito: boolean): string {
+  if (isCredito || desc.includes("ADDEBITO IN C/C")) return "PAGAMENTO_CC";
+  if (desc.includes("QUOTA ASSOCIATIVA")) return "QUOTA";
+  if (desc.includes("IMPOSTA DI BOLLO")) return "BOLLO";
+  return "SPESA";
+}
 
-  const previousBalance = parseNum(/Saldo Precedente[\s\S]*?([\d.,]+)\s/);
-  const amountDue = parseNum(/Importo Dovuto[\s\S]*?([\d.,]+)\s*EUR/);
+// ─── Core parser ─────────────────────────────────────────────────────────────
 
-  // Extract transactions
-  // Format: DD.MM.YY DD.MM.YY DESCRIPTION AMOUNT
-  const lines = text.split("\n");
-  const transactions: AmexTransaction[] = [];
-  const txPattern = /^(\d{2}\.\d{2}\.\d{2})\s+(\d{2}\.\d{2}\.\d{2})\s+(.+?)\s+([\d.,]+)$/;
+export async function parseAmexStatement(
+  buffer: Buffer
+): Promise<AmexResult> {
+  const pdf = await pdfParse(buffer);
+  const lines: string[] = pdf.text
+    .split("\n")
+    .map((l: string) => l.trim())
+    .filter((l: string) => l.length > 0);
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    const match = line.match(txPattern);
-    if (match) {
-      const opDate = parseItalianDate(match[1]);
-      const bookDate = parseItalianDate(match[2]);
-      const desc = match[3].trim();
-      const amount = parseFloat(match[4].replace(/\./g, "").replace(",", "."));
+  // ── 1. Estrai metadati dall'header ──
+  let saldoPrecedente = 0;
+  let accrediti = 0;
+  let addebiti = 0;
+  let saldoAttuale = 0;
+  let periodoInizio = "";
+  let periodoFine = "";
 
-      if (desc.includes("ADDEBITO IN C/C")) continue; // skip payment line
+  for (const line of lines) {
+    // "3.402,00-3.402,00+787,39=787,39"
+    const summaryMatch = line.match(
+      /^([\d.,]+)\s*-\s*([\d.,]+)\s*\+\s*([\d.,]+)\s*=\s*([\d.,]+)$/
+    );
+    if (summaryMatch) {
+      saldoPrecedente = parseImporto(summaryMatch[1]);
+      accrediti = parseImporto(summaryMatch[2]);
+      addebiti = parseImporto(summaryMatch[3]);
+      saldoAttuale = parseImporto(summaryMatch[4]);
+    }
 
-      const category = categorizeAmex(desc);
-
-      // Check next line for exchange rate info
-      let foreignAmount: number | null = null;
-      let foreignCurrency: string | null = null;
-      let exchangeRate: number | null = null;
-
-      if (i + 1 < lines.length) {
-        const nextLine = lines[i + 1].trim();
-        const fxMatch = nextLine.match(/Tasso di Cambio\s+([\d.,]+)/);
-        const currMatch = nextLine.match(/(Dollari Statunitensi|Rupie Pakistane|Sterline)/);
-        if (fxMatch) {
-          exchangeRate = parseFloat(fxMatch[1].replace(",", "."));
-        }
-        if (currMatch) {
-          foreignCurrency = currMatch[1] === "Dollari Statunitensi" ? "USD" : currMatch[1] === "Rupie Pakistane" ? "PKR" : "GBP";
-        }
-      }
-
-      transactions.push({
-        operation_date: opDate,
-        booking_date: bookDate,
-        description: desc,
-        amount_eur: amount,
-        amount_foreign: foreignAmount,
-        currency_foreign: foreignCurrency,
-        exchange_rate: exchangeRate,
-        category,
-      });
+    // Periodo: "15.12.202514.01.2026" (concatenato)
+    const periodoMatch = line.match(/^(\d{2}\.\d{2}\.\d{4})(\d{2}\.\d{2}\.\d{4})$/);
+    if (periodoMatch && !periodoInizio) {
+      periodoInizio = periodoMatch[1].replace(/\./g, "/");
+      periodoFine = periodoMatch[2].replace(/\./g, "/");
     }
   }
 
+  // Derive period from periodoFine (MM/YYYY → YYYY-MM)
+  let period = "";
+  if (periodoFine) {
+    const parts = periodoFine.split("/");
+    if (parts.length === 3) {
+      period = `${parts[2]}-${parts[1]}`;
+    }
+  }
+
+  // ── 2. Raccogli righe transazione (descrizioni) ──
+  const txDescriptions: {
+    dataOp: string;
+    dataCont: string;
+    desc: string;
+    isCC: boolean;
+  }[] = [];
+
+  for (const line of lines) {
+    const txMatch = line.match(TX_LINE_RE);
+    if (txMatch) {
+      const [, dataOp, dataCont, desc] = txMatch;
+      const isCC = desc.includes("ADDEBITO IN C/C");
+      txDescriptions.push({ dataOp, dataCont, desc: desc.trim(), isCC });
+    }
+  }
+
+  // ── 3. Raccogli importi EUR (blocco importi) ──
+  const allAmounts: number[] = [];
+  let inAmountZone = false;
+  let skipForeignCurrency = false;
+
+  for (const line of lines) {
+    if (line.startsWith("Nuovi addebiti per") || line.includes("Nuovi addebiti per")) {
+      inAmountZone = true;
+      continue;
+    }
+    if (line === "INTERESSI, ALTRI ADDEBITI E ACCREDITI") {
+      inAmountZone = true;
+      continue;
+    }
+    if (line.includes("Totale nuove operazioni") || line.includes("Totale interessi")) {
+      inAmountZone = false;
+      continue;
+    }
+
+    // Skip foreign currency
+    if (
+      line.includes("Dollari Statunitensi") ||
+      line.includes("Rupie Pakistane") ||
+      line.includes("Sterline") ||
+      line.includes("Yen") ||
+      line.includes("Franchi")
+    ) {
+      skipForeignCurrency = true;
+      continue;
+    }
+    if (skipForeignCurrency && line.match(/^[\d,.]+$/)) {
+      skipForeignCurrency = false;
+      continue;
+    }
+    skipForeignCurrency = false;
+
+    if (inAmountZone && AMOUNT_RE.test(line)) {
+      allAmounts.push(parseImporto(line));
+    }
+  }
+
+  // ── 4. Match descrizioni con importi ──
+  const nonCCDescriptions = txDescriptions.filter((t) => !t.isCC);
+  const ccDescriptions = txDescriptions.filter((t) => t.isCC);
+
+  const transactions: AmexTransaction[] = [];
+  let rankCounter = 1;
+
+  // Aggiungi ADDEBITO IN C/C come accredito
+  for (const cc of ccDescriptions) {
+    transactions.push({
+      operation_date: parseDate(cc.dataOp),
+      booking_date: parseDate(cc.dataCont),
+      description: cc.desc,
+      amount_eur: -accrediti,
+      category: "PAGAMENTO_CC",
+      merchant: "ADDEBITO IN C/C",
+      location: null,
+      is_credit: true,
+      rank: rankCounter++,
+    });
+  }
+
+  // Match importi con descrizioni non-CC
+  for (let i = 0; i < nonCCDescriptions.length; i++) {
+    const tx = nonCCDescriptions[i];
+    const importo = i < allAmounts.length ? allAmounts[i] : 0;
+    const { merchant, location } = cleanDescription(tx.desc);
+
+    transactions.push({
+      operation_date: parseDate(tx.dataOp),
+      booking_date: parseDate(tx.dataCont),
+      description: tx.desc,
+      amount_eur: importo,
+      category: categorize(tx.desc, false),
+      merchant,
+      location,
+      is_credit: false,
+      rank: rankCounter++,
+    });
+  }
+
+  // Ordina per data operazione
+  transactions.sort((a, b) => {
+    return a.operation_date.localeCompare(b.operation_date);
+  });
+  // Ri-assegna rank dopo ordinamento
+  transactions.forEach((t, i) => { t.rank = i + 1; });
+
   return {
     period,
-    statement_start: startDate,
-    statement_end: endDate,
-    previous_balance: previousBalance,
-    new_charges: transactions.reduce((s, t) => s + t.amount_eur, 0),
-    credits: 0,
-    current_balance: amountDue,
-    amount_due: amountDue,
+    statement_start: periodoInizio,
+    statement_end: periodoFine,
+    previous_balance: saldoPrecedente,
+    new_charges: addebiti,
+    credits: accrediti,
+    current_balance: saldoAttuale,
     transactions,
   };
 }

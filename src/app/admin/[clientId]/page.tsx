@@ -441,6 +441,12 @@ export default function ClientManagePage() {
                           <span>Uscite: €{editedRows.filter(r => r.amount < 0).reduce((s, r) => s + Math.abs(r.amount), 0).toFixed(2)}</span>
                           <span>Saldo: €{editedRows.reduce((s, r) => s + (r.amount || 0), 0).toFixed(2)}</span>
                         </>
+                      ) : preview.file_type === "amex_statement" ? (
+                        <>
+                          <span>Addebiti: €{editedRows.filter(r => (r.amount_eur || 0) > 0).reduce((s, r) => s + r.amount_eur, 0).toFixed(2)}</span>
+                          <span>Accrediti: €{editedRows.filter(r => (r.amount_eur || 0) < 0).reduce((s, r) => s + Math.abs(r.amount_eur), 0).toFixed(2)}</span>
+                          <span>{editedRows.length} operazioni</span>
+                        </>
                       ) : (
                         <span>{editedRows.length} righe</span>
                       )}

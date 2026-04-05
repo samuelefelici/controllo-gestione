@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseSalesByCategory } from "@/lib/parsers/parse-sales";
 import { parseBankMovementsPDF } from "@/lib/parsers/parse-bank";
+import { parseAmexStatement } from "@/lib/parsers/parse-amex";
 
 /**
  * POST /api/parse-preview
@@ -73,6 +74,34 @@ export async function POST(request: NextRequest) {
             count: parsed.transactions.length,
             total_in: parsed.transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0),
             total_out: parsed.transactions.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0),
+          },
+        });
+      }
+
+      // Future: payroll
+      case "amex_statement": {
+        const parsed = await parseAmexStatement(buffer);
+        return NextResponse.json({
+          success: true,
+          file_type: fileType,
+          filename: file.name,
+          period: parsed.period,
+          columns: [
+            { key: "rank", label: "#", type: "number", editable: false },
+            { key: "operation_date", label: "Data Op.", type: "text", editable: true },
+            { key: "booking_date", label: "Data Cont.", type: "text", editable: true },
+            { key: "amount_eur", label: "Importo (€)", type: "currency", editable: true },
+            { key: "category", label: "Categoria", type: "text", editable: true },
+            { key: "merchant", label: "Merchant", type: "text", editable: true },
+            { key: "location", label: "Luogo", type: "text", editable: true },
+            { key: "description", label: "Descrizione", type: "text", editable: true },
+          ],
+          rows: parsed.transactions,
+          totals: {
+            count: parsed.transactions.length,
+            addebiti: parsed.new_charges,
+            accrediti: parsed.credits,
+            saldo: parsed.current_balance,
           },
         });
       }

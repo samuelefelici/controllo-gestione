@@ -119,6 +119,35 @@ export async function POST(request: NextRequest) {
         break;
       }
 
+      case "amex_statement": {
+        const insertRows = rows.map((row: any) => ({
+          client_id,
+          period,
+          operation_date: row.operation_date,
+          booking_date: row.booking_date || row.operation_date,
+          description: (row.description || "").substring(0, 500),
+          amount_eur: row.amount_eur ?? 0,
+          category: row.category || "",
+        }));
+
+        for (let i = 0; i < insertRows.length; i += 50) {
+          const chunk = insertRows.slice(i, i + 50);
+          const { error: insertError } = await sb
+            .from("amex_transactions")
+            .insert(chunk);
+
+          if (insertError) {
+            await sb.from("import_batches").delete().eq("id", batch.id);
+            console.error("Insert error:", insertError);
+            return NextResponse.json(
+              { error: "Errore durante il salvataggio", details: insertError.message },
+              { status: 500 }
+            );
+          }
+        }
+        break;
+      }
+
       default:
         await sb.from("import_batches").delete().eq("id", batch.id);
         return NextResponse.json(

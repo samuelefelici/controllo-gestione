@@ -141,11 +141,19 @@ export async function POST(request: NextRequest) {
           await sb.from("amex_transactions").delete().eq("period", period).eq("client_id", clientId);
           if (parsed.transactions.length > 0) {
             await sb.from("amex_transactions").insert(
-              parsed.transactions.map((tx) => ({ ...tx, period, client_id: clientId }))
+              parsed.transactions.map((tx) => ({
+                client_id: clientId,
+                period,
+                operation_date: tx.operation_date,
+                booking_date: tx.booking_date,
+                description: tx.description,
+                amount_eur: tx.amount_eur,
+                category: tx.category,
+              }))
             );
           }
           rowsImported = parsed.transactions.length;
-          result = { period, transactions: rowsImported, amount_due: parsed.amount_due };
+          result = { period, transactions: rowsImported, current_balance: parsed.current_balance };
           break;
         }
 
