@@ -86,6 +86,39 @@ export async function POST(request: NextRequest) {
         break;
       }
 
+      case "bank_movements": {
+        const insertRows = rows.map((row: any, idx: number) => ({
+          client_id,
+          period,
+          transaction_date: row.transaction_date,
+          value_date: row.value_date || row.transaction_date,
+          amount: row.amount ?? 0,
+          description: (row.description || "").substring(0, 500),
+          category: row.category || "",
+          subcategory: row.subcategory || "",
+          counterpart: row.counterpart || "",
+          running_balance: row.running_balance ?? 0,
+          raw_description: row.raw_description || row.description || "",
+        }));
+
+        for (let i = 0; i < insertRows.length; i += 50) {
+          const chunk = insertRows.slice(i, i + 50);
+          const { error: insertError } = await sb
+            .from("bank_transactions")
+            .insert(chunk);
+
+          if (insertError) {
+            await sb.from("import_batches").delete().eq("id", batch.id);
+            console.error("Insert error:", insertError);
+            return NextResponse.json(
+              { error: "Errore durante il salvataggio", details: insertError.message },
+              { status: 500 }
+            );
+          }
+        }
+        break;
+      }
+
       default:
         await sb.from("import_batches").delete().eq("id", batch.id);
         return NextResponse.json(

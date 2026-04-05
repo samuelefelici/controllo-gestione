@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseSalesByCategory } from "@/lib/parsers/parse-sales";
+import { parseBankMovementsPDF } from "@/lib/parsers/parse-bank";
 
 /**
  * POST /api/parse-preview
@@ -48,7 +49,34 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      // Future: bank_movements, amex_statement, payroll
+      // Future: amex_statement, payroll
+      case "bank_movements": {
+        const parsed = await parseBankMovementsPDF(buffer);
+        return NextResponse.json({
+          success: true,
+          file_type: fileType,
+          filename: file.name,
+          period: parsed.period,
+          columns: [
+            { key: "rank", label: "#", type: "number", editable: false },
+            { key: "transaction_date", label: "Data", type: "text", editable: true },
+            { key: "value_date", label: "Valuta", type: "text", editable: true },
+            { key: "amount", label: "Importo (€)", type: "currency", editable: true },
+            { key: "category", label: "Tipo", type: "text", editable: true },
+            { key: "subcategory", label: "Causale", type: "text", editable: true },
+            { key: "counterpart", label: "Dettaglio", type: "text", editable: true },
+            { key: "running_balance", label: "Saldo (€)", type: "currency", editable: true },
+            { key: "description", label: "Descrizione", type: "text", editable: true },
+          ],
+          rows: parsed.transactions,
+          totals: {
+            count: parsed.transactions.length,
+            total_in: parsed.transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0),
+            total_out: parsed.transactions.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0),
+          },
+        });
+      }
+
       default:
         return NextResponse.json(
           { error: `Tipo file "${fileType}" non ancora supportato per l'anteprima` },

@@ -1,18 +1,18 @@
-import pdfParse from "pdf-parse";
+import pdf from "pdf-parse";
+import { readFile } from "fs/promises";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export interface BankTransaction {
-  transaction_date: string; // YYYY-MM-DD
-  value_date: string;       // YYYY-MM-DD
-  amount: number;
-  description: string;
-  category: string;         // tipo: PAGAMENTO, INCASSO, BONIFICO_IN, BONIFICO_OUT, ALTRO
-  subcategory: string;      // causale originale dal PDF
-  counterpart: string;      // dettaglio estratto (merchant, n. operazioni, beneficiario)
-  running_balance: number;  // saldo movimento
-  raw_description: string;  // descrizione completa originale
-  rank?: number;
+export interface Transaction {
+  dataMovimento: string;
+  dataValuta: string;
+  divisa: string;
+  importo: number;
+  causale: string;
+  descrizione: string;
+  saldo: number;
+  tipo: "PAGAMENTO" | "INCASSO" | "BONIFICO_IN" | "BONIFICO_OUT" | "ALTRO";
+  dettaglio: string | null;
 }
 
 // ─── Costanti ────────────────────────────────────────────────────────────────
@@ -75,13 +75,11 @@ function extractSddCreditor(desc: string): string | null {
 
 // ─── Classificazione ─────────────────────────────────────────────────────────
 
-type TipoTx = "PAGAMENTO" | "INCASSO" | "BONIFICO_IN" | "BONIFICO_OUT" | "ALTRO";
-
 function classifyTransaction(
   causale: string,
   descrizione: string,
   importo: number
-): { tipo: TipoTx; dettaglio: string | null } {
+): { tipo: Transaction["tipo"]; dettaglio: string | null } {
   switch (causale) {
     case "PAGAMENTI MEZZO POS":
     case "STORNO OPERAZIONE":
@@ -110,40 +108,26 @@ function classifyTransaction(
   }
 }
 
-// ─── Parse helpers ───────────────────────────────────────────────────────────
+// ─── Parse importo italiano ──────────────────────────────────────────────────
 
-/** Parse importo EU: "1.052,69" → 1052.69, "-17,98" → -17.98 */
 function parseImporto(raw: string): number {
   return parseFloat(raw.replace(/\./g, "").replace(",", "."));
-}
-
-/** Parse date DD/MM/YYYY → YYYY-MM-DD */
-function parseDate(dateStr: string): string {
-  if (!dateStr) return "";
-  const parts = dateStr.trim().split("/");
-  if (parts.length !== 3) return dateStr;
-  return `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
 }
 
 // ─── State machine parser ────────────────────────────────────────────────────
 
 type ParserState = "SEEK_IMPORTO" | "SEEK_CAUSALE" | "SEEK_DESCRIPTION" | "SEEK_SALDO";
 
-/**
- * Parse bank movements from PDF (BPP "Lista movimenti contabili").
- * Uses a state machine: IMPORTO → CAUSALE → DESCRIPTION → SALDO → repeat.
- */
-export async function parseBankMovementsPDF(
-  buffer: Buffer
-): Promise<{ period: string; transactions: BankTransaction[] }> {
-  const pdf = await pdfParse(buffer);
-  const lines: string[] = pdf.text
-    .split("\n")
-    .map((l: string) => l.trim())
-    .filter((l: string) => l.length > 0);
+export async function parseBankPdf(filePath: string): Promise<Transaction[]> {
+  const buffer = await readFile(filePath);
+  const { text } = await pdf(buffer);
 
-  const transactions: BankTransaction[] = [];
-  let period = "";
+  const lines = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+
+  const transactions: Transaction[] = [];
   let state: ParserState = "SEEK_IMPORTO";
   let currentImporto = 0;
   let currentCausale = "";
@@ -190,7 +174,7 @@ export async function parseBankMovementsPDF(
           descriptionLines = [];
           state = "SEEK_DESCRIPTION";
         } else {
-          // Falso positivo importo, torna a cercare
+          // Falso positivo, torna a cercare importo
           state = "SEEK_IMPORTO";
         }
         break;
@@ -218,21 +202,16 @@ export async function parseBankMovementsPDF(
             currentImporto
           );
 
-          const txDate = parseDate(currentDataMov);
-          const valDate = parseDate(currentDataVal);
-          if (!period && txDate) period = txDate.substring(0, 7);
-
           transactions.push({
-            transaction_date: txDate,
-            value_date: valDate,
-            amount: currentImporto,
-            description: `${currentCausale} - ${descrizione}`.substring(0, 500),
-            category: tipo,
-            subcategory: currentCausale,
-            counterpart: dettaglio || "",
-            running_balance: saldo,
-            raw_description: descrizione,
-            rank: transactions.length + 1,
+            dataMovimento: currentDataMov,
+            dataValuta: currentDataVal,
+            divisa: "EUR",
+            importo: currentImporto,
+            causale: currentCausale,
+            descrizione,
+            saldo,
+            tipo,
+            dettaglio,
           });
         }
         state = "SEEK_IMPORTO";
@@ -241,5 +220,41 @@ export async function parseBankMovementsPDF(
     }
   }
 
-  return { period, transactions };
+  return transactions;
 }
+
+// ─── CLI ─────────────────────────────────────────────────────────────────────
+
+async function main() {
+  const filePath = process.argv[2];
+  if (!filePath) {
+    console.error("Usage: npx tsx test-bank-pdf.ts <path-to-pdf>");
+    process.exit(1);
+  }
+
+  const transactions = await parseBankPdf(filePath);
+
+  console.log(`\n✅ ${transactions.length} transazioni trovate\n`);
+
+  const byTipo = transactions.reduce(
+    (acc, t) => ({ ...acc, [t.tipo]: (acc[t.tipo] || 0) + 1 }),
+    {} as Record<string, number>
+  );
+  console.log("Per tipo:", byTipo);
+
+  const byCausale = transactions.reduce(
+    (acc, t) => ({ ...acc, [t.causale]: (acc[t.causale] || 0) + 1 }),
+    {} as Record<string, number>
+  );
+  console.log("Per causale:", byCausale);
+
+  console.log("\nTransazioni:");
+  for (const t of transactions) {
+    const sign = t.importo >= 0 ? "+" : "";
+    console.log(
+      `  ${t.dataMovimento} | ${t.tipo.padEnd(13)} | ${(sign + t.importo.toFixed(2)).padStart(12)} | ${t.dettaglio ?? t.causale}`
+    );
+  }
+}
+
+main().catch(console.error);

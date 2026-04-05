@@ -41,7 +41,7 @@ interface ImportBatch {
 
 const FILE_TYPES = [
   { id: "sales_by_category", label: "Vendite per Categoria", desc: "PDF export da POS (es. Erply)", icon: "📊", accept: ".pdf" },
-  { id: "bank_movements", label: "Movimenti Bancari", desc: "XLS/XLSX export dalla banca", icon: "🏦", accept: ".xls,.xlsx" },
+  { id: "bank_movements", label: "Movimenti Bancari", desc: "PDF Lista Movimenti dalla banca", icon: "🏦", accept: ".pdf" },
   { id: "amex_statement", label: "Estratto Conto Amex", desc: "PDF da American Express", icon: "💳", accept: ".pdf" },
   { id: "payroll", label: "Cedolini Paga", desc: "PDF da TeamSystem o simili", icon: "👥", accept: ".pdf" },
 ];
@@ -429,9 +429,21 @@ export default function ClientManagePage() {
                       + Aggiungi riga
                     </button>
                     <div className="text-xs text-slate-500 font-mono flex gap-4">
-                      <span>Netto: €{editedRows.reduce((s, r) => s + (r.net_sales || 0), 0).toFixed(2)}</span>
-                      <span>IVA: €{editedRows.reduce((s, r) => s + (r.vat_amount || 0), 0).toFixed(2)}</span>
-                      <span>Totale: €{editedRows.reduce((s, r) => s + (r.sales_with_vat || 0), 0).toFixed(2)}</span>
+                      {preview.file_type === "sales_by_category" ? (
+                        <>
+                          <span>Netto: €{editedRows.reduce((s, r) => s + (r.net_sales || 0), 0).toFixed(2)}</span>
+                          <span>IVA: €{editedRows.reduce((s, r) => s + (r.vat_amount || 0), 0).toFixed(2)}</span>
+                          <span>Totale: €{editedRows.reduce((s, r) => s + (r.sales_with_vat || 0), 0).toFixed(2)}</span>
+                        </>
+                      ) : preview.file_type === "bank_movements" ? (
+                        <>
+                          <span>Entrate: €{editedRows.filter(r => r.amount > 0).reduce((s, r) => s + r.amount, 0).toFixed(2)}</span>
+                          <span>Uscite: €{editedRows.filter(r => r.amount < 0).reduce((s, r) => s + Math.abs(r.amount), 0).toFixed(2)}</span>
+                          <span>Saldo: €{editedRows.reduce((s, r) => s + (r.amount || 0), 0).toFixed(2)}</span>
+                        </>
+                      ) : (
+                        <span>{editedRows.length} righe</span>
+                      )}
                     </div>
                   </div>
                 </div>

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase";
 import { parseSalesByCategory } from "@/lib/parsers/parse-sales";
-import { parseBankMovementsXLS } from "@/lib/parsers/parse-bank";
+import { parseBankMovementsPDF } from "@/lib/parsers/parse-bank";
 import { parsePayroll } from "@/lib/parsers/parse-payroll";
 import { parseAmexStatement } from "@/lib/parsers/parse-amex";
 
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
         }
 
         case "bank_movements": {
-          const parsed = await parseBankMovementsXLS(buffer);
+          const parsed = await parseBankMovementsPDF(buffer);
           period = period || parsed.period;
 
           // Delete existing transactions for this period and client, then insert
