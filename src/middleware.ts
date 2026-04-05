@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { updateSession } from "@/lib/supabase-middleware";
 
 // Public routes that don't require authentication
 const publicPaths = ["/login", "/api/"];
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Allow public paths and static assets
@@ -17,32 +18,20 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check for Supabase auth token in cookies
-  const sbAccessToken = request.cookies.get("sb-access-token")?.value;
-  const sbRefreshToken = request.cookies.get("sb-refresh-token")?.value;
+  // Refresh session & check auth
+  const { user, supabaseResponse } = await updateSession(request);
 
-  // Also check the new cookie format: sb-<project-ref>-auth-token
-  const hasAuthCookie = Array.from(request.cookies.getAll()).some(
-    (c) => c.name.includes("-auth-token") || c.name === "sb-access-token"
-  );
-
-  if (!sbAccessToken && !hasAuthCookie) {
+  if (!user) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("redirect", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  return NextResponse.next();
+  return supabaseResponse;
 }
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
     "/((?!_next/static|_next/image|favicon.ico).*)",
   ],
 };
