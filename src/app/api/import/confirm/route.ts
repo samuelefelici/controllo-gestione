@@ -149,24 +149,36 @@ export async function POST(request: NextRequest) {
       }
 
       case "payroll": {
-        const insertRows = rows.map((row: any, idx: number) => ({
-          client_id,
-          import_batch_id: batch.id,
-          period,
-          employee_code: row.employee_code ?? 0,
-          employee_name: row.employee_name || "",
-          role: row.role || "",
-          part_time_pct: row.part_time_pct ?? null,
-          hire_date: row.hire_date || "",
-          hours_worked: row.hours_worked ?? 0,
-          days_worked: row.days_worked ?? 0,
-          gross_pay: row.gross_pay ?? 0,
-          social_contributions: row.social_contributions ?? 0,
-          irpef: row.irpef ?? 0,
-          net_pay: row.net_pay ?? 0,
-          tfr_month: row.tfr_month ?? 0,
-          total_deductions: row.total_deductions ?? 0,
-        }));
+        const insertRows = rows.map((row: any, idx: number) => {
+          // Convert hire_date from DD/MM/YY to YYYY-MM-DD for PostgreSQL DATE column
+          let hireDate: string | null = null;
+          if (row.hire_date && row.hire_date.trim()) {
+            const parts = row.hire_date.trim().split("/");
+            if (parts.length === 3) {
+              const yy = parseInt(parts[2]);
+              const year = yy < 50 ? 2000 + yy : 1900 + yy;
+              hireDate = `${year}-${parts[1]}-${parts[0]}`;
+            }
+          }
+
+          return {
+            client_id,
+            period,
+            employee_code: row.employee_code ?? 0,
+            employee_name: row.employee_name || "",
+            role: row.role || "",
+            part_time_pct: row.part_time_pct ?? null,
+            hire_date: hireDate,
+            hours_worked: row.hours_worked ?? 0,
+            days_worked: row.days_worked ?? 0,
+            gross_pay: row.gross_pay ?? 0,
+            social_contributions: row.social_contributions ?? 0,
+            irpef: row.irpef ?? 0,
+            net_pay: row.net_pay ?? 0,
+            tfr_month: row.tfr_month ?? 0,
+            total_deductions: row.total_deductions ?? 0,
+          };
+        });
 
         for (let i = 0; i < insertRows.length; i += 50) {
           const chunk = insertRows.slice(i, i + 50);
