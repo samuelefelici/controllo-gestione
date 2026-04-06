@@ -73,36 +73,22 @@ export default function LoginPage() {
           <div className="bg-slate-900/70 backdrop-blur-2xl border border-slate-800/60 rounded-3xl p-8 sm:p-10 shadow-2xl">
 
             {/* Logo */}
-            <div className="flex justify-center mb-6 opacity-0 animate-fadeInUp">
+            <div className="flex justify-center mb-8 opacity-0 animate-fadeInUp">
               <div className="animate-float">
-                <div className="relative w-24 h-24 rounded-2xl overflow-hidden shadow-lg shadow-sky-500/10">
+                <div className="relative w-72 h-72">
                   <Image
                     src="/logo.png"
                     alt="Felici Analytics"
                     fill
-                    className="object-contain"
+                    className="object-contain drop-shadow-2xl"
                     priority
                   />
                 </div>
               </div>
             </div>
 
-            {/* Brand */}
-            <div className="text-center mb-8 opacity-0 animate-fadeInUp animation-delay-200">
-              <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-                Felici Analytics
-              </h1>
-              <div className="flex items-center justify-center gap-2 mt-2">
-                <div className="h-px w-8 bg-gradient-to-r from-transparent to-slate-700" />
-                <p className="text-xs text-slate-500 uppercase tracking-[0.2em] font-medium">
-                  Controllo di Gestione
-                </p>
-                <div className="h-px w-8 bg-gradient-to-l from-transparent to-slate-700" />
-              </div>
-            </div>
-
             {/* Form */}
-            <form onSubmit={handleLogin} className="space-y-5 opacity-0 animate-fadeInUp animation-delay-400">
+            <form onSubmit={handleLogin} className="space-y-5 opacity-0 animate-fadeInUp animation-delay-200">
               {/* Email */}
               <div className="relative group">
                 <label className="block text-[11px] text-slate-500 uppercase tracking-wider font-semibold mb-2 ml-1">
