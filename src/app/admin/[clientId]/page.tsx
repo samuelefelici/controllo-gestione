@@ -67,9 +67,15 @@ export default function ClientManagePage() {
   const [batches, setBatches] = useState<ImportBatch[]>([]);
   const [undoing, setUndoing] = useState<string | null>(null);
 
+  // Share state
+  const [shareToken, setShareToken] = useState<string | null>(null);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+
   useEffect(() => {
     loadClientInfo();
     loadBatches();
+    loadShareToken();
   }, [clientId]);
 
   async function loadClientInfo() {
@@ -89,6 +95,35 @@ export default function ClientManagePage() {
       const data = await res.json();
       setBatches(data.batches || []);
     }
+  }
+
+  async function loadShareToken() {
+    const res = await fetch(`/api/clients/${clientId}/share`);
+    if (res.ok) {
+      const data = await res.json();
+      setShareToken(data.share_token || null);
+    }
+  }
+
+  async function generateShareLink() {
+    setShareLoading(true);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/share`, { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        setShareToken(data.share_token);
+      }
+    } finally {
+      setShareLoading(false);
+    }
+  }
+
+  function copyShareLink() {
+    if (!shareToken) return;
+    const url = `${window.location.origin}/view/${shareToken}`;
+    navigator.clipboard.writeText(url);
+    setShareCopied(true);
+    setTimeout(() => setShareCopied(false), 2000);
   }
 
   /* --- Upload & Parse --- */
@@ -255,6 +290,23 @@ export default function ClientManagePage() {
             <Link href={`/dashboard?client_id=${clientId}`} className="px-5 py-2.5 bg-sky-600 hover:bg-sky-500 text-white text-sm font-semibold rounded-lg transition-colors">
               Dashboard →
             </Link>
+            {/* Share button */}
+            {shareToken ? (
+              <button
+                onClick={copyShareLink}
+                className="px-4 py-2.5 bg-emerald-600/20 border border-emerald-600/30 hover:bg-emerald-600/30 text-emerald-400 text-sm font-semibold rounded-lg transition-colors"
+              >
+                {shareCopied ? "✅ Copiato!" : "🔗 Link Cliente"}
+              </button>
+            ) : (
+              <button
+                onClick={generateShareLink}
+                disabled={shareLoading}
+                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm rounded-lg transition-colors disabled:opacity-50"
+              >
+                {shareLoading ? "..." : "🔗 Genera Link"}
+              </button>
+            )}
             <Link href="/admin" className="text-xs text-slate-500 hover:text-sky-400">← Clienti</Link>
           </div>
         </div>

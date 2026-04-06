@@ -31,6 +31,7 @@ CREATE TABLE clients (
   name TEXT NOT NULL,
   description TEXT,
   logo_url TEXT,
+  share_token TEXT UNIQUE,
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT now()
 );
