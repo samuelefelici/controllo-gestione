@@ -1,10 +1,12 @@
-import pdf from "pdf-parse";
+import pdfParse from "pdf-parse";
+
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface PayrollRecord {
   employee_code: number;
   employee_name: string;
   role: string;
-  part_time_pct: number;
+  part_time_pct: number | null; // null = full time (100)
   hire_date: string;
   hours_worked: number;
   days_worked: number;
@@ -13,132 +15,174 @@ export interface PayrollRecord {
   irpef: number;
   net_pay: number;
   tfr_month: number;
-  additional_regional: number;
-  additional_municipal: number;
   total_deductions: number;
+  rank?: number;
 }
 
 export interface PayrollResult {
   period: string;
   records: PayrollRecord[];
-  company: string;
 }
 
-/**
- * Parse payroll PDF (Cedolini) from TeamSystem format.
- * Each page is one employee's payslip.
- */
-export async function parsePayroll(buffer: Buffer): Promise<PayrollResult> {
-  const data = await pdf(buffer);
-  const text = data.text;
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
-  // Extract company name
-  const companyMatch = text.match(/Ditta\s*\n\s*(.+?)(?:\n|VIA)/);
-  const company = companyMatch?.[1]?.trim() || "SMART WORLD SRLS";
+function parseNum(raw: string): number {
+  if (!raw || !raw.trim()) return 0;
+  return parseFloat(raw.trim().replace(/\./g, "").replace(",", ".")) || 0;
+}
 
-  // Extract period: "GENNAIO 2026" pattern
-  const periodMatch = text.match(/(GENNAIO|FEBBRAIO|MARZO|APRILE|MAGGIO|GIUGNO|LUGLIO|AGOSTO|SETTEMBRE|OTTOBRE|NOVEMBRE|DICEMBRE)\s+(\d{4})/i);
-  const monthNames: Record<string, string> = {
-    GENNAIO: "01", FEBBRAIO: "02", MARZO: "03", APRILE: "04",
-    MAGGIO: "05", GIUGNO: "06", LUGLIO: "07", AGOSTO: "08",
-    SETTEMBRE: "09", OTTOBRE: "10", NOVEMBRE: "11", DICEMBRE: "12",
-  };
+function extractNumbers(line: string): number[] {
+  const matches = line.match(/-?[\d.]+,\d{2}/g);
+  return matches ? matches.map(parseNum) : [];
+}
+
+const MONTH_MAP: Record<string, string> = {
+  GENNAIO: "01", FEBBRAIO: "02", MARZO: "03", APRILE: "04",
+  MAGGIO: "05", GIUGNO: "06", LUGLIO: "07", AGOSTO: "08",
+  SETTEMBRE: "09", OTTOBRE: "10", NOVEMBRE: "11", DICEMBRE: "12",
+};
+
+// ─── Core parser ─────────────────────────────────────────────────────────────
+
+const HEADER_RE =
+  /(GENNAIO|FEBBRAIO|MARZO|APRILE|MAGGIO|GIUGNO|LUGLIO|AGOSTO|SETTEMBRE|OTTOBRE|NOVEMBRE|DICEMBRE)\s+(\d{4})\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+(\d+)\s+(.+?)(?:\d{2}\/\d{2}\/\d{2})/;
+
+export async function parsePayroll(
+  buffer: Buffer
+): Promise<PayrollResult> {
+  const pdf = await pdfParse(buffer);
+  const lines: string[] = pdf.text.split("\n");
+
   let period = "";
-  if (periodMatch) {
-    const monthNum = monthNames[periodMatch[1].toUpperCase()] || "01";
-    period = `${periodMatch[2]}-${monthNum}`;
-  }
-
-  // Split by pages (each employee is on a separate page)
-  // The TeamSystem format repeats headers per page
-  const pages = text.split(/Foglio N\./);
   const records: PayrollRecord[] = [];
 
-  for (const page of pages) {
-    if (!page.includes("COGNOME E NOME") && !page.includes("TOTALE LORDO")) continue;
-
-    try {
-      // Employee code and name
-      const codeNameMatch = page.match(/(\d{1,3})\s+([\w\s]+?)(?:\d{2}\/\d{2}\/\d{2})/);
-      const employeeName = codeNameMatch?.[2]?.trim() || "";
-      const employeeCode = parseInt(codeNameMatch?.[1] || "0");
-
-      if (!employeeName) continue;
-
-      // Role (QUALIFICA line)
-      const roleMatch = page.match(/(?:AUSILIARIO|AIUTO|ADD\.|COMMESSO|VENDITA|AMMINISTRATIV)[^\n]*/i);
-      const role = roleMatch?.[0]?.trim() || "";
-
-      // Part time percentage
-      const ptMatch = page.match(/(?:% P\.\s*TIME|P\.TIME)\s*(\d+[,.]?\d*)/);
-      const partTimePct = ptMatch ? parseFloat(ptMatch[1].replace(",", ".")) : 100;
-
-      // Hire date
-      const hireDateMatch = page.match(/DATA ASSUNZ\.\s*(\d{2}\/\d{2}\/\d{2})/);
-      const hireDate = hireDateMatch?.[1] || "";
-
-      // Hours and days
-      const hoursMatch = page.match(/ORE\.CONTR\.\s*\n?\s*([\d,.]+)/);
-      const hours = hoursMatch ? parseFloat(hoursMatch[1].replace(",", ".")) : 0;
-
-      const daysMatch = page.match(/GG\.\s*CONTR\.\s*[\n\s]*([\d]+)/);
-      const days = daysMatch ? parseInt(daysMatch[1]) : 0;
-
-      // TOTALE LORDO
-      const grossMatch = page.match(/TOTALE LORDO\s*\n?\s*([\d.,]+)/);
-      const grossPay = grossMatch ? parseFloat(grossMatch[1].replace(/\./g, "").replace(",", ".")) : 0;
-
-      // TOT. CONTR. SOC.
-      const contrMatch = page.match(/TOT\.\s*CONTR\.\s*SOC\.\s*\n?\s*([\d.,]+)/);
-      const socialContributions = contrMatch ? parseFloat(contrMatch[1].replace(/\./g, "").replace(",", ".")) : 0;
-
-      // NETTO BUSTA
-      const netMatch = page.match(/NETTO BUSTA\s*\n?\s*([\d.,]+)/);
-      const netPay = netMatch ? parseFloat(netMatch[1].replace(/\./g, "").replace(",", ".")) : 0;
-
-      // TFR MESE
-      const tfrMatch = page.match(/TFR MESE\s*\n?\s*([\d.,]+)/);
-      const tfrMonth = tfrMatch ? parseFloat(tfrMatch[1].replace(/\./g, "").replace(",", ".")) : 0;
-
-      // IRPEF (TOT. TRAT. IRPEF)
-      const irpefMatch = page.match(/TOT\.\s*TRAT\.\s*IRPEF\s*\n?\s*([\d.,]+)/);
-      const irpef = irpefMatch ? parseFloat(irpefMatch[1].replace(/\./g, "").replace(",", ".")) : 0;
-
-      // Total deductions
-      const deductMatch = page.match(/TOT\.\s*TRATTENUTE\s*\n?\s*([\d.,]+)/);
-      const totalDeductions = deductMatch ? parseFloat(deductMatch[1].replace(/\./g, "").replace(",", ".")) : 0;
-
-      // Addizionale regionale
-      const regMatch = page.match(/ADDIZ\.\s*REGIONALE\s*\n?\s*([\d.,]+)/);
-      const additionalRegional = regMatch ? parseFloat(regMatch[1].replace(/\./g, "").replace(",", ".")) : 0;
-
-      // Addizionale comunale
-      const comMatch = page.match(/ADDIZ\.\s*COMUNALE\s*\n?\s*([\d.,]+)/);
-      const additionalMunicipal = comMatch ? parseFloat(comMatch[1].replace(/\./g, "").replace(",", ".")) : 0;
-
-      if (grossPay > 0) {
-        records.push({
-          employee_code: employeeCode,
-          employee_name: employeeName,
-          role,
-          part_time_pct: partTimePct,
-          hire_date: hireDate,
-          hours_worked: hours,
-          days_worked: days,
-          gross_pay: grossPay,
-          social_contributions: socialContributions,
-          irpef,
-          net_pay: netPay,
-          tfr_month: tfrMonth,
-          additional_regional: additionalRegional,
-          additional_municipal: additionalMunicipal,
-          total_deductions: totalDeductions,
-        });
-      }
-    } catch (err) {
-      console.error("Error parsing payroll page:", err);
+  // Trova gli indici dove inizia ogni cedolino
+  const payslipStarts: number[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (HEADER_RE.test(lines[i].trim())) {
+      payslipStarts.push(i);
     }
   }
 
-  return { period, records, company };
+  for (let ps = 0; ps < payslipStarts.length; ps++) {
+    const startIdx = payslipStarts[ps];
+    const endIdx = ps + 1 < payslipStarts.length
+      ? payslipStarts[ps + 1]
+      : lines.length;
+
+    const block = lines.slice(startIdx, endIdx).map((l: string) => l.trim());
+
+    // ── 1. Riga anagrafica ──
+    const headerMatch = block[0].match(HEADER_RE);
+    if (!headerMatch) continue;
+
+    const mese = headerMatch[1];
+    const anno = parseInt(headerMatch[2]);
+    const codice = parseInt(headerMatch[3]);
+    const cognomeNome = headerMatch[4].trim();
+
+    // Periodo dal primo cedolino
+    if (!period) {
+      period = `${anno}-${MONTH_MAP[mese] || "01"}`;
+    }
+
+    // Data assunzione
+    const dateMatch = block[0].match(/(\d{2}\/\d{2}\/\d{2})\s+(\d{2}\/\d{2})/);
+    const dataAssunzione = dateMatch ? dateMatch[1] : "";
+
+    // ── 2. CF + GG/Ore (riga successiva) ──
+    const cfLine = block[1] || "";
+    const ggOreMatch = cfLine.match(/(\d{2,3})\s+([\d.,]+)$/);
+    const ggContributivi = ggOreMatch ? parseInt(ggOreMatch[1]) : 0;
+    const oreContributive = ggOreMatch ? parseNum(ggOreMatch[2]) : 0;
+
+    // ── 3. Qualifica + part time ──
+    const qualLine = block[2] || "";
+    const qualMatch = qualLine.match(/^\d+\s+(.+?)(?:\s+([\d.,]+))?\s+(\d)\^?\s+(\d)$/);
+    const qualifica = qualMatch ? qualMatch[1].trim() : "";
+    const percentualePartTime = qualMatch && qualMatch[2] ? parseNum(qualMatch[2]) : null;
+
+    // ── 4. Totali ──
+    let totaleLordo = 0;
+    let imponibileContributivo = 0;
+    let contributiSociali = 0;
+    let imponibileIrpef = 0;
+    let irpefLorda = 0;
+    let totaleDetrazioni = 0;
+    let totaleTrattenuteIrpef = 0;
+    let totaleTrattenute = 0;
+    let nettoBusta = 0;
+    let tfrMese = 0;
+
+    for (let j = 0; j < block.length; j++) {
+      const line = block[j];
+      const nums = extractNumbers(line);
+
+      // TOTALE LORDO + IMPON CONTR + CONTRIBUTO
+      if (nums.length >= 4 && !totaleLordo) {
+        const isLordo = j > 10 && nums[0] > 100 && nums[1] > 50 && nums[0] >= nums[1];
+        if (isLordo) {
+          totaleLordo = nums[0];
+          imponibileContributivo = nums[1];
+          contributiSociali = nums[2];
+        }
+      }
+
+      // IMP IRPEF, IRPEF LORDA, TOT DETR, TOT TRAT IRPEF
+      if (totaleLordo && !imponibileIrpef && nums.length >= 4) {
+        const couldBeIrpef = nums[0] > 50 && nums[0] < totaleLordo && nums[1] < nums[0];
+        if (couldBeIrpef) {
+          imponibileIrpef = nums[0];
+          irpefLorda = nums[1];
+          totaleDetrazioni = nums[2];
+          totaleTrattenuteIrpef = nums[3];
+        }
+      }
+
+      // NETTO BUSTA
+      const nettoMatch = line.match(/([\d.,]+)\s+([\d.,]+)\s+F\s+GIORNO FESTIVO/);
+      if (nettoMatch) {
+        nettoBusta = parseNum(nettoMatch[2]);
+      }
+
+      // DATI STATISTICI: ore, imponibile INAIL, TFR
+      const statsMatch = line.match(
+        /^[O01]\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+\d+\s+([\d.,]+)\s+([\d.,]+)$/
+      );
+      if (statsMatch && !tfrMese) {
+        tfrMese = parseNum(statsMatch[5]);
+      }
+
+      // TOT TRATTENUTE
+      if (totaleLordo && imponibileIrpef && !totaleTrattenute) {
+        if (nums.length >= 2 && nums.length <= 3) {
+          const lastNum = nums[nums.length - 1];
+          if (lastNum > 100 && lastNum < totaleLordo) {
+            totaleTrattenute = lastNum;
+          }
+        }
+      }
+    }
+
+    if (totaleLordo > 0) {
+      records.push({
+        employee_code: codice,
+        employee_name: cognomeNome,
+        role: qualifica,
+        part_time_pct: percentualePartTime,
+        hire_date: dataAssunzione,
+        hours_worked: oreContributive,
+        days_worked: ggContributivi,
+        gross_pay: totaleLordo,
+        social_contributions: contributiSociali,
+        irpef: totaleTrattenuteIrpef,
+        net_pay: nettoBusta,
+        tfr_month: tfrMese,
+        total_deductions: totaleTrattenute,
+        rank: records.length + 1,
+      });
+    }
+  }
+
+  return { period, records };
 }

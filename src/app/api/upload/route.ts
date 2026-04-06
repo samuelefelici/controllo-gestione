@@ -177,8 +177,6 @@ export async function POST(request: NextRequest) {
               irpef: rec.irpef,
               net_pay: rec.net_pay,
               tfr_month: rec.tfr_month,
-              additional_regional: rec.additional_regional,
-              additional_municipal: rec.additional_municipal,
               total_deductions: rec.total_deductions,
             }, { onConflict: "client_id,period,employee_name" });
           }

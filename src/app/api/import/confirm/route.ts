@@ -148,6 +148,44 @@ export async function POST(request: NextRequest) {
         break;
       }
 
+      case "payroll": {
+        const insertRows = rows.map((row: any, idx: number) => ({
+          client_id,
+          import_batch_id: batch.id,
+          period,
+          employee_code: row.employee_code ?? 0,
+          employee_name: row.employee_name || "",
+          role: row.role || "",
+          part_time_pct: row.part_time_pct ?? null,
+          hire_date: row.hire_date || "",
+          hours_worked: row.hours_worked ?? 0,
+          days_worked: row.days_worked ?? 0,
+          gross_pay: row.gross_pay ?? 0,
+          social_contributions: row.social_contributions ?? 0,
+          irpef: row.irpef ?? 0,
+          net_pay: row.net_pay ?? 0,
+          tfr_month: row.tfr_month ?? 0,
+          total_deductions: row.total_deductions ?? 0,
+        }));
+
+        for (let i = 0; i < insertRows.length; i += 50) {
+          const chunk = insertRows.slice(i, i + 50);
+          const { error: insertError } = await sb
+            .from("payroll")
+            .insert(chunk);
+
+          if (insertError) {
+            await sb.from("import_batches").delete().eq("id", batch.id);
+            console.error("Insert error:", insertError);
+            return NextResponse.json(
+              { error: "Errore durante il salvataggio", details: insertError.message },
+              { status: 500 }
+            );
+          }
+        }
+        break;
+      }
+
       default:
         await sb.from("import_batches").delete().eq("id", batch.id);
         return NextResponse.json(

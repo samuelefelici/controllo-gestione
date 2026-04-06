@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { parseSalesByCategory } from "@/lib/parsers/parse-sales";
 import { parseBankMovementsPDF } from "@/lib/parsers/parse-bank";
 import { parseAmexStatement } from "@/lib/parsers/parse-amex";
+import { parsePayroll } from "@/lib/parsers/parse-payroll";
 
 /**
  * POST /api/parse-preview
@@ -102,6 +103,39 @@ export async function POST(request: NextRequest) {
             addebiti: parsed.new_charges,
             accrediti: parsed.credits,
             saldo: parsed.current_balance,
+          },
+        });
+      }
+
+      case "payroll": {
+        const parsed = await parsePayroll(buffer);
+        return NextResponse.json({
+          success: true,
+          file_type: fileType,
+          filename: file.name,
+          period: parsed.period,
+          columns: [
+            { key: "rank", label: "#", type: "number", editable: false },
+            { key: "employee_name", label: "Dipendente", type: "text", editable: true },
+            { key: "employee_code", label: "Cod.", type: "number", editable: true },
+            { key: "role", label: "Qualifica", type: "text", editable: true },
+            { key: "part_time_pct", label: "PT %", type: "percent", editable: true },
+            { key: "hire_date", label: "Assunzione", type: "text", editable: true },
+            { key: "hours_worked", label: "Ore", type: "number", editable: true },
+            { key: "days_worked", label: "GG", type: "number", editable: true },
+            { key: "gross_pay", label: "Lordo (€)", type: "currency", editable: true },
+            { key: "social_contributions", label: "Contr.Soc. (€)", type: "currency", editable: true },
+            { key: "irpef", label: "IRPEF (€)", type: "currency", editable: true },
+            { key: "net_pay", label: "Netto (€)", type: "currency", editable: true },
+            { key: "tfr_month", label: "TFR (€)", type: "currency", editable: true },
+            { key: "total_deductions", label: "Tot.Tratt. (€)", type: "currency", editable: true },
+          ],
+          rows: parsed.records,
+          totals: {
+            count: parsed.records.length,
+            total_gross: parsed.records.reduce((s, r) => s + r.gross_pay, 0),
+            total_net: parsed.records.reduce((s, r) => s + r.net_pay, 0),
+            total_tfr: parsed.records.reduce((s, r) => s + r.tfr_month, 0),
           },
         });
       }

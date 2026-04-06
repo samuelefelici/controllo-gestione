@@ -447,6 +447,13 @@ export default function ClientManagePage() {
                           <span>Accrediti: €{editedRows.filter(r => (r.amount_eur || 0) < 0).reduce((s, r) => s + Math.abs(r.amount_eur), 0).toFixed(2)}</span>
                           <span>{editedRows.length} operazioni</span>
                         </>
+                      ) : preview.file_type === "payroll" ? (
+                        <>
+                          <span>{editedRows.length} dipendenti</span>
+                          <span>Tot. Lordo: €{editedRows.reduce((s, r) => s + (r.gross_pay || 0), 0).toFixed(2)}</span>
+                          <span>Tot. Netto: €{editedRows.reduce((s, r) => s + (r.net_pay || 0), 0).toFixed(2)}</span>
+                          <span>Tot. TFR: €{editedRows.reduce((s, r) => s + (r.tfr_month || 0), 0).toFixed(2)}</span>
+                        </>
                       ) : (
                         <span>{editedRows.length} righe</span>
                       )}
