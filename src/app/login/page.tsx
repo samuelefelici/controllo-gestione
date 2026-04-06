@@ -87,8 +87,19 @@ export default function LoginPage() {
               </div>
             </div>
 
+            {/* Sottotitolo */}
+            <div className="text-center mb-8 opacity-0 animate-fadeInUp animation-delay-200">
+              <div className="flex items-center justify-center gap-2">
+                <div className="h-px w-8 bg-gradient-to-r from-transparent to-slate-700" />
+                <p className="text-xs text-slate-500 uppercase tracking-[0.2em] font-medium">
+                  Controllo Gestione
+                </p>
+                <div className="h-px w-8 bg-gradient-to-l from-transparent to-slate-700" />
+              </div>
+            </div>
+
             {/* Form */}
-            <form onSubmit={handleLogin} className="space-y-5 opacity-0 animate-fadeInUp animation-delay-200">
+            <form onSubmit={handleLogin} className="space-y-5 opacity-0 animate-fadeInUp animation-delay-400">
               {/* Email */}
               <div className="relative group">
                 <label className="block text-[11px] text-slate-500 uppercase tracking-wider font-semibold mb-2 ml-1">
