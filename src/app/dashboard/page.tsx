@@ -232,31 +232,6 @@ function DashboardContent() {
               <KPI icon="💳" label="Spese Amex" value={fmt(amex.total_charges || 0)} sub={`${amex.count || 0} operazioni`} change={ch.amex} color="text-purple-400" />
             </div>
 
-            {/* Incidence gauges */}
-            <Card className="p-5">
-              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">Indici di Incidenza sul Fatturato</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                {[
-                  { label: "Personale / Vendite", value: inc.staff_on_sales, warn: 40, danger: 55 },
-                  { label: "Amex / Vendite", value: inc.amex_on_sales, warn: 10, danger: 20 },
-                  { label: "Sconti / Lordo", value: inc.discount_on_gross, warn: 5, danger: 10 },
-                  { label: "Aliquota IVA media", value: inc.vat_rate_avg, warn: 999, danger: 999 },
-                ].map((g, i) => {
-                  const color = g.value >= g.danger ? "text-red-400" : g.value >= g.warn ? "text-amber-400" : "text-emerald-400";
-                  const bg = g.value >= g.danger ? "bg-red-500" : g.value >= g.warn ? "bg-amber-500" : "bg-emerald-500";
-                  return (
-                    <div key={i} className="text-center">
-                      <div className={`text-2xl font-bold font-mono ${color}`}>{(g.value || 0).toFixed(1)}%</div>
-                      <div className="text-[10px] text-slate-500 mt-1">{g.label}</div>
-                      <div className="w-full h-1 bg-slate-800 rounded-full mt-2 overflow-hidden">
-                        <div className={`h-full rounded-full ${bg}`} style={{ width: `${Math.min(g.value || 0, 100)}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-
             {/* Charts row */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Top categories */}
