@@ -14,7 +14,8 @@ const PRESET_CATEGORIES = [
   "Riparazioni e Ricambi",
   "TARI (Rifiuti)",
   "Canone RAI",
-  "Spese Viaggi",
+  "By Air Ticket",
+  "Baluwo",
 ];
 
 /* GET — list bank categories for a client (auto-seeds preset on first call) */
