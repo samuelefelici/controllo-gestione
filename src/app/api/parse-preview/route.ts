@@ -91,6 +91,7 @@ export async function POST(request: NextRequest) {
             { key: "booking_date", label: "Data Cont.", type: "text", editable: true },
             { key: "amount_eur", label: "Importo (€)", type: "currency", editable: true },
             { key: "category", label: "Categoria", type: "text", editable: true },
+            { key: "cost_category", label: "Macrocategoria", type: "select", editable: true },
             { key: "merchant", label: "Merchant", type: "text", editable: true },
             { key: "location", label: "Luogo", type: "text", editable: true },
             { key: "description", label: "Descrizione", type: "text", editable: true },

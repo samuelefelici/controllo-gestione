@@ -129,6 +129,7 @@ export async function POST(request: NextRequest) {
           description: (row.description || "").substring(0, 500),
           amount_eur: row.amount_eur ?? 0,
           category: row.category || "",
+          cost_category: row.cost_category || "",
         }));
 
         for (let i = 0; i < insertRows.length; i += 50) {

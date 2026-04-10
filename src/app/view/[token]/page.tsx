@@ -446,10 +446,9 @@ function PublicDashboardContent() {
         {/* ═══ TAB: COSTI ═══ */}
         {tab === "costs" && (
           <>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
               <KPI icon={<Users size={18} />} label="Personale" value={fmt(comp.total_costi_personale || 0)} sub={`${(inc.staff_on_sales || 0).toFixed(1)}% del fatturato`} color="text-amber-400" />
-              <KPI icon={<Landmark size={18} />} label="Uscite Banca" value={fmt(comp.total_spese_banca || 0)} change={ch.bank_out} color="text-red-400" />
-              <KPI icon={<CreditCard size={18} />} label="Addebiti Amex" value={fmt(comp.total_spese_amex || 0)} change={ch.amex} color="text-purple-400" />
+              <KPI icon={<Landmark size={18} />} label="Uscite Banca + Amex" value={fmt((comp.total_spese_banca || 0) + (comp.total_spese_amex || 0))} change={ch.bank_out} color="text-red-400" />
               <KPI icon={<BarChart3 size={18} />} label="Costi Totali" value={fmt((comp.total_costi_personale || 0) + (comp.total_spese_banca || 0) + (comp.total_spese_amex || 0))} color="text-red-500" />
             </div>
 

@@ -176,6 +176,7 @@ CREATE TABLE amex_transactions (
   currency_foreign TEXT,
   exchange_rate NUMERIC(10,4),
   category TEXT,
+  cost_category TEXT DEFAULT '',
   created_at TIMESTAMPTZ DEFAULT now()
 );
 

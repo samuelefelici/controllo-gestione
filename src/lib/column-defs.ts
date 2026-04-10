@@ -35,6 +35,7 @@ export const COLUMN_DEFS: Record<string, ColumnDef[]> = {
     { key: "description", label: "Descrizione", type: "text", editable: true },
     { key: "amount_eur", label: "Importo €", type: "currency", editable: true },
     { key: "category", label: "Categoria", type: "text", editable: true },
+    { key: "cost_category", label: "Macrocategoria", type: "select", editable: true },
   ],
   payroll: [
     { key: "employee_code", label: "Cod.", type: "number", editable: true },

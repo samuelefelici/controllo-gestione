@@ -8,6 +8,7 @@ export interface AmexTransaction {
   description: string;      // descrizione completa
   amount_eur: number;       // importo EUR (positivo = spesa, negativo = accredito)
   category: string;         // SPESA | QUOTA | BOLLO | PAGAMENTO_CC
+  cost_category: string;    // Macrocategoria manuale (come bank_movements)
   merchant: string;         // nome pulito merchant
   location: string | null;  // città/paese
   is_credit: boolean;       // true se accredito
@@ -193,6 +194,7 @@ export async function parseAmexStatement(
       description: cc.desc,
       amount_eur: -accrediti,
       category: "PAGAMENTO_CC",
+      cost_category: "",
       merchant: "ADDEBITO IN C/C",
       location: null,
       is_credit: true,
@@ -212,6 +214,7 @@ export async function parseAmexStatement(
       description: tx.desc,
       amount_eur: importo,
       category: categorize(tx.desc, false),
+      cost_category: "",
       merchant,
       location,
       is_credit: false,

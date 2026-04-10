@@ -127,10 +127,17 @@ export async function GET(request: NextRequest) {
   };
 
   // Bank cost breakdown by cost_category (manually assigned by user)
-  const bankCostBreakdown: Record<string, number> = {};
+  const costBreakdown: Record<string, number> = {};
   for (const tx of bankOut) {
     const key = tx.cost_category || "Non classificato";
-    bankCostBreakdown[key] = (bankCostBreakdown[key] || 0) + Math.abs(tx.amount);
+    costBreakdown[key] = (costBreakdown[key] || 0) + Math.abs(tx.amount);
+  }
+  // Add amex transactions cost_category into the same breakdown
+  for (const tx of (amexTx || [])) {
+    if (tx.amount_eur > 0) {
+      const key = tx.cost_category || "Non classificato";
+      costBreakdown[key] = (costBreakdown[key] || 0) + Math.abs(tx.amount_eur);
+    }
   }
 
   // Bank income breakdown
@@ -237,7 +244,7 @@ export async function GET(request: NextRequest) {
     bank: {
       transactions: bankTx || [],
       aggregates: ba,
-      cost_breakdown: Object.entries(bankCostBreakdown).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value),
+      cost_breakdown: Object.entries(costBreakdown).map(([name, value]) => ({ name, value })).sort((a, b) => (b.value as number) - (a.value as number)),
       income_breakdown: Object.entries(bankIncomeBreakdown).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value),
       daily_balance: dailyBalance,
     },

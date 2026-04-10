@@ -230,6 +230,7 @@ export async function PUT(
           description: (row.description || "").substring(0, 500),
           amount_eur: row.amount_eur ?? 0,
           category: row.category || "",
+          cost_category: row.cost_category || "",
         }));
         for (let i = 0; i < insertRows.length; i += 50) {
           const { error } = await sb.from("amex_transactions").insert(insertRows.slice(i, i + 50));
