@@ -8,6 +8,11 @@ import {
   PieChart, Pie, Cell, CartesianGrid, Legend,
   AreaChart, Area, ComposedChart, Line,
 } from "recharts";
+import {
+  ShoppingCart, Users, Landmark, CreditCard, Banknote, Receipt,
+  Package, Tag, BarChart3, Building2, ClipboardList,
+  ArrowDownToLine, ArrowUpFromLine,
+} from "lucide-react";
 
 /* ═══════ Helpers ═══════ */
 const fmt = (v: number) =>
@@ -28,13 +33,13 @@ const periodLabel = (p: string) => {
 
 /* ═══════ Components ═══════ */
 function KPI({ label, value, sub, change, color = "text-sky-400", icon }: {
-  label: string; value: string; sub?: string; change?: number | null; color?: string; icon?: string;
+  label: string; value: string; sub?: string; change?: number | null; color?: string; icon?: React.ReactNode;
 }) {
   return (
     <div className="bg-slate-900/80 backdrop-blur rounded-2xl p-5 border border-slate-800/60 flex-1 min-w-[200px] group hover:border-slate-700/80 transition-all">
       <div className="flex items-center justify-between mb-3">
         <span className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">{label}</span>
-        {icon && <span className="text-lg opacity-60">{icon}</span>}
+        {icon && <span className="text-slate-500">{icon}</span>}
       </div>
       <div className={`text-2xl font-bold font-mono ${color}`}>{value}</div>
       <div className="flex items-center gap-2 mt-1.5">
@@ -226,10 +231,10 @@ function DashboardContent() {
           <>
             {/* Hero KPIs */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <KPI icon="🛒" label="Vendite Nette" value={fmt(sa.total_net_sales || 0)} sub={`${sa.total_qty || 0} pezzi venduti`} change={ch.sales_net} />
-              <KPI icon="👥" label="Costo Personale" value={fmt(comp.total_costi_personale || 0)} sub={`${pa.employee_count || 0} dipendenti`} change={ch.payroll_gross} color="text-amber-400" />
-              <KPI icon="🏦" label="Saldo C/C" value={fmt(ba.closing_balance || 0)} sub={`${ba.transaction_count || 0} movimenti`} color="text-emerald-400" />
-              <KPI icon="💳" label="Spese Amex" value={fmt(amex.total_charges || 0)} sub={`${amex.count || 0} operazioni`} change={ch.amex} color="text-purple-400" />
+              <KPI icon={<ShoppingCart size={18} />} label="Vendite Nette" value={fmt(sa.total_net_sales || 0)} sub={`${sa.total_qty || 0} pezzi venduti`} change={ch.sales_net} />
+              <KPI icon={<Users size={18} />} label="Costo Personale" value={fmt(comp.total_costi_personale || 0)} sub={`${pa.employee_count || 0} dipendenti`} change={ch.payroll_gross} color="text-amber-400" />
+              <KPI icon={<Landmark size={18} />} label="Saldo C/C" value={fmt(ba.closing_balance || 0)} sub={`${ba.transaction_count || 0} movimenti`} color="text-emerald-400" />
+              <KPI icon={<CreditCard size={18} />} label="Spese Amex" value={fmt(amex.total_charges || 0)} sub={`${amex.count || 0} operazioni`} change={ch.amex} color="text-purple-400" />
             </div>
 
             {/* Charts row */}
@@ -312,10 +317,10 @@ function DashboardContent() {
         {tab === "sales" && (
           <>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <KPI icon="💰" label="Vendite Nette" value={fmt(sa.total_net_sales)} change={ch.sales_net} />
-              <KPI icon="🧾" label="IVA Incassata" value={fmt(sa.total_vat)} color="text-amber-400" />
-              <KPI icon="📦" label="Pezzi Venduti" value={`${sa.total_qty?.toLocaleString("it-IT") || 0}`} change={ch.sales_qty} color="text-emerald-400" />
-              <KPI icon="🏷️" label="Sconti Applicati" value={fmt(sa.total_discount)} sub={`${(inc.discount_on_gross || 0).toFixed(1)}% del lordo`} color="text-red-400" />
+              <KPI icon={<Banknote size={18} />} label="Vendite Nette" value={fmt(sa.total_net_sales)} change={ch.sales_net} />
+              <KPI icon={<Receipt size={18} />} label="IVA Incassata" value={fmt(sa.total_vat)} color="text-amber-400" />
+              <KPI icon={<Package size={18} />} label="Pezzi Venduti" value={`${sa.total_qty?.toLocaleString("it-IT") || 0}`} change={ch.sales_qty} color="text-emerald-400" />
+              <KPI icon={<Tag size={18} />} label="Sconti Applicati" value={fmt(sa.total_discount)} sub={`${(inc.discount_on_gross || 0).toFixed(1)}% del lordo`} color="text-red-400" />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -431,18 +436,18 @@ function DashboardContent() {
         {tab === "costs" && (
           <>
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-              <KPI icon="👥" label="Personale" value={fmt(comp.total_costi_personale || 0)} sub={`${(inc.staff_on_sales || 0).toFixed(1)}% del fatturato`} color="text-amber-400" />
-              <KPI icon="🏦" label="Uscite Banca" value={fmt(comp.total_spese_banca || 0)} change={ch.bank_out} color="text-red-400" />
-              <KPI icon="💳" label="Addebiti Amex" value={fmt(comp.total_spese_amex || 0)} change={ch.amex} color="text-purple-400" />
-              <KPI icon="🧾" label="Fatture Fornitori" value={fmt(data.invoices?.total || 0)} sub={`${data.invoices?.count || 0} fatture`} change={ch.invoices} color="text-orange-400" />
-              <KPI icon="📊" label="Costi Totali" value={fmt((comp.total_costi_personale || 0) + (comp.total_spese_banca || 0) + (comp.total_spese_amex || 0) + (data.invoices?.total || 0))} color="text-red-500" />
+              <KPI icon={<Users size={18} />} label="Personale" value={fmt(comp.total_costi_personale || 0)} sub={`${(inc.staff_on_sales || 0).toFixed(1)}% del fatturato`} color="text-amber-400" />
+              <KPI icon={<Landmark size={18} />} label="Uscite Banca" value={fmt(comp.total_spese_banca || 0)} change={ch.bank_out} color="text-red-400" />
+              <KPI icon={<CreditCard size={18} />} label="Addebiti Amex" value={fmt(comp.total_spese_amex || 0)} change={ch.amex} color="text-purple-400" />
+              <KPI icon={<Receipt size={18} />} label="Fatture Fornitori" value={fmt(data.invoices?.total || 0)} sub={`${data.invoices?.count || 0} fatture`} change={ch.invoices} color="text-orange-400" />
+              <KPI icon={<BarChart3 size={18} />} label="Costi Totali" value={fmt((comp.total_costi_personale || 0) + (comp.total_spese_banca || 0) + (comp.total_spese_amex || 0) + (data.invoices?.total || 0))} color="text-red-500" />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {/* Bank outflows breakdown */}
-              {data.bank?.cost_breakdown?.length > 0 && (
-                <Card className="p-5">
-                  <h3 className="text-sm font-semibold text-white mb-4">Dettaglio Costi</h3>
+              {/* Bank outflows breakdown + Merce c/acquisti */}
+              <Card className="p-5">
+                <h3 className="text-sm font-semibold text-white mb-4">Dettaglio Costi</h3>
+                {data.bank?.cost_breakdown?.length > 0 && (
                   <div className="space-y-2.5">
                     {data.bank.cost_breakdown.slice(0, 12).map((item: any, i: number) => (
                       <div key={i} className="flex items-center gap-3">
@@ -453,14 +458,11 @@ function DashboardContent() {
                       </div>
                     ))}
                   </div>
-                </Card>
-              )}
-
-              {/* Merce c/acquisti — totale fatture */}
-              <Card className="p-5 flex flex-col items-center justify-center">
-                <h3 className="text-sm font-semibold text-white mb-4">Merce c/acquisti</h3>
-                <span className="text-3xl font-bold text-orange-400">{fmt(data.invoices?.total || 0)}</span>
-                <span className="text-xs text-slate-500 mt-1">{data.invoices?.count || 0} fatture</span>
+                )}
+                <div className="mt-4 pt-4 border-t border-slate-800/60 flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-400">Merce c/acquisti</span>
+                  <span className="text-sm font-bold font-mono text-orange-400">{fmt(data.invoices?.total || 0)}</span>
+                </div>
               </Card>
 
               {/* Invoices by supplier */}
@@ -553,11 +555,11 @@ function DashboardContent() {
         {tab === "payroll" && (
           <>
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-              <KPI icon="💰" label="Lordo Totale" value={fmt2(pa.total_gross)} color="text-red-400" />
-              <KPI icon="🏦" label="Netto Totale" value={fmt2(pa.total_net)} color="text-emerald-400" />
-              <KPI icon="🏛️" label="Contributi" value={fmt2(pa.total_contributions)} color="text-amber-400" />
-              <KPI icon="📋" label="IRPEF" value={fmt2(pa.total_irpef)} color="text-orange-400" />
-              <KPI icon="🏦" label="TFR Mese" value={fmt2(pa.total_tfr)} color="text-purple-400" />
+              <KPI icon={<Banknote size={18} />} label="Lordo Totale" value={fmt2(pa.total_gross)} color="text-red-400" />
+              <KPI icon={<Landmark size={18} />} label="Netto Totale" value={fmt2(pa.total_net)} color="text-emerald-400" />
+              <KPI icon={<Building2 size={18} />} label="Contributi" value={fmt2(pa.total_contributions)} color="text-amber-400" />
+              <KPI icon={<ClipboardList size={18} />} label="IRPEF" value={fmt2(pa.total_irpef)} color="text-orange-400" />
+              <KPI icon={<Landmark size={18} />} label="TFR Mese" value={fmt2(pa.total_tfr)} color="text-purple-400" />
             </div>
 
             {/* Avg card */}
@@ -658,10 +660,10 @@ function DashboardContent() {
         {tab === "cashflow" && (
           <>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <KPI icon="📥" label="Entrate C/C" value={fmt(ba.total_in || 0)} change={ch.bank_in} color="text-emerald-400" />
-              <KPI icon="📤" label="Uscite C/C" value={fmt(ba.total_out || 0)} change={ch.bank_out} color="text-red-400" />
-              <KPI icon="🏦" label="Saldo Iniziale" value={fmt(ba.opening_balance || 0)} color="text-slate-400" />
-              <KPI icon="🏦" label="Saldo Finale" value={fmt(ba.closing_balance || 0)} color="text-emerald-400" />
+              <KPI icon={<ArrowDownToLine size={18} />} label="Entrate C/C" value={fmt(ba.total_in || 0)} change={ch.bank_in} color="text-emerald-400" />
+              <KPI icon={<ArrowUpFromLine size={18} />} label="Uscite C/C" value={fmt(ba.total_out || 0)} change={ch.bank_out} color="text-red-400" />
+              <KPI icon={<Landmark size={18} />} label="Saldo Iniziale" value={fmt(ba.opening_balance || 0)} color="text-slate-400" />
+              <KPI icon={<Landmark size={18} />} label="Saldo Finale" value={fmt(ba.closing_balance || 0)} color="text-emerald-400" />
             </div>
 
             {/* Balance chart */}
