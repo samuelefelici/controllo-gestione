@@ -456,46 +456,12 @@ function DashboardContent() {
                 </Card>
               )}
 
-              {/* Invoices breakdown by category */}
-              {data.invoices?.by_category?.length > 0 && (
-                <Card className="p-5">
-                  <h3 className="text-sm font-semibold text-white mb-4">Fatture per Categoria</h3>
-                  <div className="space-y-2.5">
-                    {data.invoices.by_category.map((item: any, i: number) => (
-                      <div key={i} className="flex items-center gap-3">
-                        <div className="w-2 h-2 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
-                        <span className="text-xs text-slate-400 flex-1 truncate">{item.name}</span>
-                        <span className="text-xs font-mono font-semibold text-orange-400">{fmt(item.value)}</span>
-                        <MiniBar value={item.value} max={data.invoices.by_category[0]?.value || 1} color={COLORS[i % COLORS.length]} />
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              )}
-
-              {/* Amex breakdown */}
-              {data.amex?.by_category?.length > 0 && (
-                <Card className="p-5">
-                  <h3 className="text-sm font-semibold text-white mb-4">Addebiti Amex per Categoria</h3>
-                  <ResponsiveContainer width="100%" height={220}>
-                    <PieChart>
-                      <Pie data={data.amex.by_category.map((c: any, i: number) => ({ ...c, color: COLORS[i % COLORS.length] }))} dataKey="value" cx="50%" cy="50%" innerRadius={45} outerRadius={85} strokeWidth={2} stroke="#020617">
-                        {data.amex.by_category.map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                      </Pie>
-                      <Tooltip content={<CustomTooltip />} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 justify-center">
-                    {data.amex.by_category.map((c: any, i: number) => (
-                      <div key={i} className="flex items-center gap-1 text-[10px]">
-                        <div className="w-2 h-2 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
-                        <span className="text-slate-500">{c.name}</span>
-                        <span className="font-mono text-slate-400">{fmt(c.value)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              )}
+              {/* Merce c/acquisti — totale fatture */}
+              <Card className="p-5 flex flex-col items-center justify-center">
+                <h3 className="text-sm font-semibold text-white mb-4">Merce c/acquisti</h3>
+                <span className="text-3xl font-bold text-orange-400">{fmt(data.invoices?.total || 0)}</span>
+                <span className="text-xs text-slate-500 mt-1">{data.invoices?.count || 0} fatture</span>
+              </Card>
 
               {/* Invoices by supplier */}
               {data.invoices?.by_supplier?.length > 0 && (
