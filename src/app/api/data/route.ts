@@ -126,46 +126,10 @@ export async function GET(request: NextRequest) {
     total_out: (prevBankTx || []).filter((t: any) => t.amount < 0).reduce((s: number, t: any) => s + Math.abs(t.amount), 0),
   };
 
-  // Bank cost breakdown by cost category (classify at runtime for old data)
-  const COST_RULES: { label: string; keywords: RegExp }[] = [
-    { label: "Affitto",                    keywords: /affitto|locazione|canone\s*locaz|pigione|immobil/i },
-    { label: "Stipendi",                   keywords: /stipend|emolument|retribuzion|busta\s*paga|cedolino|salari|competenz[ae]\s*(mese|mensil)|accredito\s*stip/i },
-    { label: "Energia Elettrica",          keywords: /enel|energia\s*elettr|luce|electric|a2a\s*energi|iren\s*luce|edison|hera\s*comm|sorgenia|engie|plenitude|e[\s-]?distribuz/i },
-    { label: "Acqua",                      keywords: /acqua|idric|acquedotto|aqp|acea|hera\s*acqua|abbanoa|publiacqua|consorzio.*acqua/i },
-    { label: "Erply (Software POS)",       keywords: /erply|erpley/i },
-    { label: "Commercialista",             keywords: /commercialist|consulen[tz].*fiscal|studio.*(?:associat|commerc|profess)|dott\.?\s|ragionier|tributar/i },
-    { label: "Agenzia delle Entrate",      keywords: /agenz.*entrat|fisco|tribut|irpef|iva\s*periodic|f24|mod\.\s*f24|imposta|tassa\s*(?:governat|erarial)|erario|ravvedimento/i },
-    { label: "Spese Bancarie",             keywords: /commissioni|canone.*(?:conto|carta|pos|bancomat)|spese\s*(?:bancar|conto|tenut)|bolli|imposta.*bollo|recupero\s*bolli|interessi\s*(?:debitor|passiv)/i },
-    { label: "Pulizia e Igiene",           keywords: /pulizi[ae]|igienizz|detergent|sanific|cleaning|impresa\s*puliz/i },
-    { label: "Carta e Stampa",             keywords: /carta|stampa|tipograf|rotoli|scontrin|ricevut.*fiscal|registratore\s*(?:cassa|telematic)|print/i },
-    { label: "Riparazioni e Ricambi",      keywords: /riparazion|spray|manutenzion.*(?:cellu|phone|smartph)|ricambi|accessori\s*(?:cellu|phone)|pezzi\s*ricambio/i },
-    { label: "TARI (Rifiuti)",             keywords: /tari|spazzatura|rifiut|nettezza|igiene\s*urban|raccolta.*differenz/i },
-    { label: "Canone RAI",                 keywords: /canone\s*(?:rai|tv|televisiv)|rai\s*canone/i },
-    { label: "Abbonamenti",                keywords: /abbonam|subscri|netflix|spotify|amazon\s*prime|microsoft\s*365|google\s*workspace|adobe|software\s*(?:licen|canone)|saas|cloud/i },
-  ];
-  const BANK_FEE_CAUSALI = ["COMMISSIONI", "CANONE", "CANONE P.O.S.", "RECUPERO BOLLI"];
-
-  function classifyBankCost(tx: any): string {
-    // Se ha già una subcategory classificata (nuovi import), usala
-    const sub = tx.subcategory || "";
-    const knownLabels = COST_RULES.map(r => r.label);
-    if (knownLabels.includes(sub) || sub === "Spese Bancarie" || sub === "Altre Spese") {
-      return sub;
-    }
-    // Classifica a runtime per vecchi import
-    if (tx.amount >= 0) return sub || tx.category || "Altro";
-    const causale = tx.description?.split(" - ")[0]?.trim() || "";
-    if (BANK_FEE_CAUSALI.includes(causale)) return "Spese Bancarie";
-    const fullText = `${tx.description || ""} ${tx.counterpart || ""} ${sub}`;
-    for (const rule of COST_RULES) {
-      if (rule.keywords.test(fullText)) return rule.label;
-    }
-    return "Altre Spese";
-  }
-
+  // Bank cost breakdown by cost_category (manually assigned by user)
   const bankCostBreakdown: Record<string, number> = {};
   for (const tx of bankOut) {
-    const key = classifyBankCost(tx);
+    const key = tx.cost_category || "Non classificato";
     bankCostBreakdown[key] = (bankCostBreakdown[key] || 0) + Math.abs(tx.amount);
   }
 

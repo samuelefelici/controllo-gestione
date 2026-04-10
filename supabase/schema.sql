@@ -153,6 +153,7 @@ CREATE TABLE bank_transactions (
   counterpart TEXT,
   running_balance NUMERIC(12,2),
   raw_description TEXT,
+  cost_category TEXT DEFAULT '',
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -251,7 +252,19 @@ CREATE TABLE invoice_categories (
 );
 
 -- ══════════════════════════════════════════════════════════════
--- 8d. Invoices (fatture fornitori)
+-- 8d. Bank categories (macrocategorie costi bancari, personalizzabili)
+-- ══════════════════════════════════════════════════════════════
+
+CREATE TABLE bank_categories (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(client_id, name)
+);
+
+-- ══════════════════════════════════════════════════════════════
+-- 8e. Invoices (fatture fornitori)
 -- ══════════════════════════════════════════════════════════════
 
 CREATE TABLE invoices (
@@ -311,6 +324,7 @@ ALTER TABLE payroll ENABLE ROW LEVEL SECURITY;
 ALTER TABLE file_uploads ENABLE ROW LEVEL SECURITY;
 ALTER TABLE suppliers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE invoice_categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bank_categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users see own clients" ON clients
@@ -330,6 +344,7 @@ CREATE POLICY "Client data access" ON payroll FOR ALL USING (user_has_client_acc
 CREATE POLICY "Client data access" ON file_uploads FOR ALL USING (user_has_client_access(client_id));
 CREATE POLICY "Client data access" ON suppliers FOR ALL USING (user_has_client_access(client_id));
 CREATE POLICY "Client data access" ON invoice_categories FOR ALL USING (user_has_client_access(client_id));
+CREATE POLICY "Client data access" ON bank_categories FOR ALL USING (user_has_client_access(client_id));
 CREATE POLICY "Client data access" ON invoices FOR ALL USING (user_has_client_access(client_id));
 
 -- ══════════════════════════════════════════════════════════════

@@ -12,6 +12,7 @@ export interface BankTransaction {
   counterpart: string;      // dettaglio estratto (merchant, n. operazioni, beneficiario)
   running_balance: number;  // saldo movimento
   raw_description: string;  // descrizione completa originale
+  cost_category: string;    // macrocategoria costi (compilata dall'utente)
   rank?: number;
 }
 
@@ -111,59 +112,6 @@ function classifyTransaction(
 }
 
 // ─── Voci di costo (subcategory per uscite) ──────────────────────────────────
-
-/**
- * Classifica le uscite bancarie in voci di costo specifiche.
- * Analizza causale, descrizione e controparte per determinare la categoria.
- * Le entrate non vengono categorizzate (restano con la causale originale).
- */
-const COST_RULES: { label: string; keywords: RegExp }[] = [
-  { label: "Affitto",                    keywords: /affitto|locazione|canone\s*locaz|pigione|immobil/i },
-  { label: "Stipendi",                   keywords: /stipend|emolument|retribuzion|busta\s*paga|cedolino|salari|competenz[ae]\s*(mese|mensil)|accredito\s*stip/i },
-  { label: "Energia Elettrica",          keywords: /enel|energia\s*elettr|luce|electric|a2a\s*energi|iren\s*luce|edison|hera\s*comm|sorgenia|engie|plenitude|e[\s-]?distribuz/i },
-  { label: "Acqua",                      keywords: /acqua|idric|acquedotto|aqp|acea|hera\s*acqua|abbanoa|publiacqua|consorzio.*acqua/i },
-  { label: "Erply (Software POS)",       keywords: /erply|erpley/i },
-  { label: "Commercialista",             keywords: /commercialist|consulen[tz].*fiscal|studio.*(?:associat|commerc|profess)|dott\.?\s|ragionier|tributar/i },
-  { label: "Agenzia delle Entrate",      keywords: /agenz.*entrat|fisco|tribut|irpef|iva\s*periodic|f24|mod\.\s*f24|imposta|tassa\s*(?:governat|erarial)|erario|ravvedimento/i },
-  { label: "Spese Bancarie",             keywords: /commissioni|canone.*(?:conto|carta|pos|bancomat)|spese\s*(?:bancar|conto|tenut)|bolli|imposta.*bollo|recupero\s*bolli|interessi\s*(?:debitor|passiv)/i },
-  { label: "Pulizia e Igiene",           keywords: /pulizi[ae]|igienizz|detergent|sanific|cleaning|impresa\s*puliz/i },
-  { label: "Carta e Stampa",             keywords: /carta|stampa|tipograf|rotoli|scontrin|ricevut.*fiscal|registratore\s*(?:cassa|telematic)|print/i },
-  { label: "Riparazioni e Ricambi",      keywords: /riparazion|spray|manutenzion.*(?:cellu|phone|smartph)|ricambi|accessori\s*(?:cellu|phone)|pezzi\s*ricambio/i },
-  { label: "TARI (Rifiuti)",             keywords: /tari|spazzatura|rifiut|nettezza|igiene\s*urban|raccolta.*differenz/i },
-  { label: "Canone RAI",                 keywords: /canone\s*(?:rai|tv|televisiv)|rai\s*canone/i },
-  { label: "Abbonamenti",                keywords: /abbonam|subscri|netflix|spotify|amazon\s*prime|microsoft\s*365|google\s*workspace|adobe|software\s*(?:licen|canone)|saas|cloud/i },
-];
-
-function classifyCostCategory(
-  causale: string,
-  descrizione: string,
-  controparte: string,
-  importo: number
-): string {
-  // Solo le uscite vengono categorizzate
-  if (importo >= 0) return causale;
-
-  const fullText = `${causale} ${descrizione} ${controparte}`;
-
-  // Spese bancarie dirette (commissioni, canone, bolli)
-  if (
-    causale === "COMMISSIONI" ||
-    causale === "CANONE" ||
-    causale === "CANONE P.O.S." ||
-    causale === "RECUPERO BOLLI"
-  ) {
-    return "Spese Bancarie";
-  }
-
-  // Cerca match con le regole
-  for (const rule of COST_RULES) {
-    if (rule.keywords.test(fullText)) {
-      return rule.label;
-    }
-  }
-
-  return "Altre Spese";
-}
 
 // ─── Parse helpers ───────────────────────────────────────────────────────────
 
@@ -277,24 +225,17 @@ export async function parseBankMovementsPDF(
           const valDate = parseDate(currentDataVal);
           if (!period && txDate) period = txDate.substring(0, 7);
 
-          // Classifica voce di costo per le uscite
-          const costCategory = classifyCostCategory(
-            currentCausale,
-            descrizione,
-            dettaglio || "",
-            currentImporto
-          );
-
           transactions.push({
             transaction_date: txDate,
             value_date: valDate,
             amount: currentImporto,
             description: `${currentCausale} - ${descrizione}`.substring(0, 500),
             category: tipo,
-            subcategory: costCategory,
+            subcategory: currentCausale,
             counterpart: dettaglio || "",
             running_balance: saldo,
             raw_description: descrizione,
+            cost_category: "",
             rank: transactions.length + 1,
           });
         }

@@ -6,7 +6,7 @@
 export interface ColumnDef {
   key: string;
   label: string;
-  type: "text" | "number" | "currency" | "percent";
+  type: "text" | "number" | "currency" | "percent" | "select";
   editable: boolean;
 }
 
@@ -23,13 +23,11 @@ export const COLUMN_DEFS: Record<string, ColumnDef[]> = {
   ],
   bank_movements: [
     { key: "transaction_date", label: "Data", type: "text", editable: true },
-    { key: "value_date", label: "Valuta", type: "text", editable: true },
-    { key: "description", label: "Descrizione", type: "text", editable: true },
+    { key: "description", label: "Descrizione", type: "text", editable: false },
+    { key: "counterpart", label: "Controparte", type: "text", editable: false },
     { key: "amount", label: "Importo €", type: "currency", editable: true },
-    { key: "category", label: "Categoria", type: "text", editable: true },
-    { key: "subcategory", label: "Sottocategoria", type: "text", editable: true },
-    { key: "counterpart", label: "Controparte", type: "text", editable: true },
-    { key: "running_balance", label: "Saldo €", type: "currency", editable: true },
+    { key: "cost_category", label: "Macrocategoria", type: "select", editable: true },
+    { key: "running_balance", label: "Saldo €", type: "currency", editable: false },
   ],
   amex_statement: [
     { key: "operation_date", label: "Data Op.", type: "text", editable: true },

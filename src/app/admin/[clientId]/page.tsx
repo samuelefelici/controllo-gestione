@@ -82,11 +82,15 @@ export default function ClientManagePage() {
   const [suppliers, setSuppliers] = useState<string[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
 
+  // Bank categories state
+  const [bankCategories, setBankCategories] = useState<string[]>([]);
+
   useEffect(() => {
     loadClientInfo();
     loadBatches();
     loadShareToken();
     loadSuppliersAndCategories();
+    loadBankCategories();
   }, [clientId]);
 
   async function loadClientInfo() {
@@ -128,6 +132,14 @@ export default function ClientManagePage() {
     if (cRes.ok) {
       const d = await cRes.json();
       setCategories((d.categories || []).map((c: any) => c.name));
+    }
+  }
+
+  async function loadBankCategories() {
+    const res = await fetch(`/api/bank-categories?client_id=${clientId}`);
+    if (res.ok) {
+      const d = await res.json();
+      setBankCategories((d.categories || []).map((c: any) => c.name));
     }
   }
 
@@ -213,7 +225,7 @@ export default function ClientManagePage() {
     if (!preview) return;
     const newRow: Record<string, any> = {};
     preview.columns.forEach((col) => {
-      newRow[col.key] = col.type === "text" ? "" : 0;
+      newRow[col.key] = col.type === "text" || col.type === "select" ? "" : 0;
     });
     newRow.rank = editedRows.length + 1;
     setEditedRows((prev) => [...prev, newRow]);
@@ -406,7 +418,7 @@ export default function ClientManagePage() {
   function addHistoryRow() {
     const newRow: Record<string, any> = {};
     historyColumns.forEach((col) => {
-      newRow[col.key] = col.type === "text" ? "" : 0;
+      newRow[col.key] = col.type === "text" || col.type === "select" ? "" : 0;
     });
     setHistoryRows((prev) => [...prev, newRow]);
   }
@@ -766,13 +778,26 @@ export default function ClientManagePage() {
                             {preview.columns.map((col) => (
                               <td key={col.key} className="px-3 py-1.5">
                                 {col.editable ? (
-                                  <input
-                                    type={col.type === "text" ? "text" : "number"}
-                                    step={col.type === "currency" || col.type === "percent" ? "0.01" : "1"}
-                                    value={row[col.key] ?? ""}
-                                    onChange={(e) => updateCell(rowIdx, col.key, e.target.value)}
-                                    className="w-full bg-transparent border border-transparent hover:border-slate-700 focus:border-sky-500 rounded px-2 py-1 text-sm text-white font-mono focus:outline-none focus:ring-1 focus:ring-sky-500/50 transition-colors"
-                                  />
+                                  col.type === "select" ? (
+                                    <select
+                                      value={row[col.key] ?? ""}
+                                      onChange={(e) => updateCell(rowIdx, col.key, e.target.value)}
+                                      className="w-full bg-slate-800 border border-slate-700 hover:border-slate-600 focus:border-sky-500 rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500/50 transition-colors"
+                                    >
+                                      <option value="">— Seleziona —</option>
+                                      {bankCategories.map((cat) => (
+                                        <option key={cat} value={cat}>{cat}</option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <input
+                                      type={col.type === "text" ? "text" : "number"}
+                                      step={col.type === "currency" || col.type === "percent" ? "0.01" : "1"}
+                                      value={row[col.key] ?? ""}
+                                      onChange={(e) => updateCell(rowIdx, col.key, e.target.value)}
+                                      className="w-full bg-transparent border border-transparent hover:border-slate-700 focus:border-sky-500 rounded px-2 py-1 text-sm text-white font-mono focus:outline-none focus:ring-1 focus:ring-sky-500/50 transition-colors"
+                                    />
+                                  )
                                 ) : (
                                   <span className="px-2 py-1 text-slate-400 font-mono text-sm">
                                     {row[col.key]}
@@ -963,13 +988,26 @@ export default function ClientManagePage() {
                                       {historyColumns.map((col) => (
                                         <td key={col.key} className="px-3 py-1.5">
                                           {col.editable ? (
-                                            <input
-                                              type={col.type === "text" ? "text" : "number"}
-                                              step={col.type === "currency" || col.type === "percent" ? "0.01" : "1"}
-                                              value={row[col.key] ?? ""}
-                                              onChange={(e) => updateHistoryCell(rowIdx, col.key, e.target.value)}
-                                              className="w-full bg-transparent border border-transparent hover:border-slate-700 focus:border-sky-500 rounded px-2 py-1 text-sm text-white font-mono focus:outline-none focus:ring-1 focus:ring-sky-500/50 transition-colors"
-                                            />
+                                            col.type === "select" ? (
+                                              <select
+                                                value={row[col.key] ?? ""}
+                                                onChange={(e) => updateHistoryCell(rowIdx, col.key, e.target.value)}
+                                                className="w-full bg-slate-800 border border-slate-700 hover:border-slate-600 focus:border-sky-500 rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500/50 transition-colors"
+                                              >
+                                                <option value="">— Seleziona —</option>
+                                                {bankCategories.map((cat) => (
+                                                  <option key={cat} value={cat}>{cat}</option>
+                                                ))}
+                                              </select>
+                                            ) : (
+                                              <input
+                                                type={col.type === "text" ? "text" : "number"}
+                                                step={col.type === "currency" || col.type === "percent" ? "0.01" : "1"}
+                                                value={row[col.key] ?? ""}
+                                                onChange={(e) => updateHistoryCell(rowIdx, col.key, e.target.value)}
+                                                className="w-full bg-transparent border border-transparent hover:border-slate-700 focus:border-sky-500 rounded px-2 py-1 text-sm text-white font-mono focus:outline-none focus:ring-1 focus:ring-sky-500/50 transition-colors"
+                                              />
+                                            )
                                           ) : (
                                             <span className="px-2 py-1 text-slate-400 font-mono text-sm">
                                               {row[col.key]}
