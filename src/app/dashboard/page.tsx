@@ -442,7 +442,7 @@ function DashboardContent() {
               {/* Bank outflows breakdown */}
               {data.bank?.cost_breakdown?.length > 0 && (
                 <Card className="p-5">
-                  <h3 className="text-sm font-semibold text-white mb-4">Dettaglio Uscite C/C</h3>
+                  <h3 className="text-sm font-semibold text-white mb-4">Dettaglio Costi</h3>
                   <div className="space-y-2.5">
                     {data.bank.cost_breakdown.slice(0, 12).map((item: any, i: number) => (
                       <div key={i} className="flex items-center gap-3">
