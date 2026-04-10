@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { COLUMN_DEFS, type ColumnDef } from "@/lib/column-defs";
 
 /* --- Types --- */
 
@@ -11,13 +12,6 @@ interface ClientInfo {
   slug: string;
   name: string;
   description: string | null;
-}
-
-interface ColumnDef {
-  key: string;
-  label: string;
-  type: "text" | "number" | "currency" | "percent";
-  editable: boolean;
 }
 
 interface PreviewData {
@@ -66,6 +60,14 @@ export default function ClientManagePage() {
   // History state
   const [batches, setBatches] = useState<ImportBatch[]>([]);
   const [undoing, setUndoing] = useState<string | null>(null);
+
+  // History edit state
+  const [editingBatchId, setEditingBatchId] = useState<string | null>(null);
+  const [historyRows, setHistoryRows] = useState<Record<string, any>[]>([]);
+  const [historyColumns, setHistoryColumns] = useState<ColumnDef[]>([]);
+  const [historyFileType, setHistoryFileType] = useState<string>("");
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historySaving, setHistorySaving] = useState(false);
 
   // Share state
   const [shareToken, setShareToken] = useState<string | null>(null);
@@ -241,6 +243,7 @@ export default function ClientManagePage() {
 
       if (res.ok && data.success) {
         loadBatches();
+        if (editingBatchId === batchId) closeHistoryEdit();
       } else {
         alert("Errore: " + (data.error || "Annullamento fallito"));
       }
@@ -248,6 +251,95 @@ export default function ClientManagePage() {
       alert("Errore: " + err.message);
     } finally {
       setUndoing(null);
+    }
+  }
+
+  /* --- History Edit --- */
+
+  async function openBatchEdit(batch: ImportBatch) {
+    if (editingBatchId === batch.id) {
+      closeHistoryEdit();
+      return;
+    }
+    setHistoryLoading(true);
+    setEditingBatchId(batch.id);
+    setHistoryFileType(batch.file_type);
+    setHistoryColumns(COLUMN_DEFS[batch.file_type] || []);
+
+    try {
+      const res = await fetch(`/api/import/${batch.id}/rows`);
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setHistoryRows(JSON.parse(JSON.stringify(data.rows)));
+      } else {
+        alert("Errore caricamento righe: " + (data.error || "Errore"));
+        closeHistoryEdit();
+      }
+    } catch (err: any) {
+      alert("Errore: " + err.message);
+      closeHistoryEdit();
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  function closeHistoryEdit() {
+    setEditingBatchId(null);
+    setHistoryRows([]);
+    setHistoryColumns([]);
+    setHistoryFileType("");
+  }
+
+  function updateHistoryCell(rowIdx: number, key: string, value: string) {
+    setHistoryRows((prev) => {
+      const next = [...prev];
+      const row = { ...next[rowIdx] };
+      const col = historyColumns.find((c) => c.key === key);
+      if (col?.type === "number" || col?.type === "currency" || col?.type === "percent") {
+        row[key] = parseFloat(value) || 0;
+      } else {
+        row[key] = value;
+      }
+      next[rowIdx] = row;
+      return next;
+    });
+  }
+
+  function deleteHistoryRow(rowIdx: number) {
+    setHistoryRows((prev) => prev.filter((_, i) => i !== rowIdx));
+  }
+
+  function addHistoryRow() {
+    const newRow: Record<string, any> = {};
+    historyColumns.forEach((col) => {
+      newRow[col.key] = col.type === "text" ? "" : 0;
+    });
+    setHistoryRows((prev) => [...prev, newRow]);
+  }
+
+  async function saveHistoryEdit() {
+    if (!editingBatchId) return;
+    setHistorySaving(true);
+
+    try {
+      const res = await fetch(`/api/import/${editingBatchId}/rows`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows: historyRows }),
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        loadBatches();
+        closeHistoryEdit();
+      } else {
+        alert("Errore salvataggio: " + (data.error || "Errore"));
+      }
+    } catch (err: any) {
+      alert("Errore: " + err.message);
+    } finally {
+      setHistorySaving(false);
     }
   }
 
@@ -529,39 +621,188 @@ export default function ClientManagePage() {
             ) : (
               <div className="space-y-3">
                 {batches.map((batch) => (
-                  <div
-                    key={batch.id}
-                    className={`flex items-center justify-between rounded-xl border p-4 transition-all ${
-                      batch.undone_at
-                        ? "border-slate-800/50 bg-slate-900/30 opacity-50"
-                        : "border-slate-800 bg-slate-900/50"
-                    }`}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg ${
-                        batch.undone_at ? "bg-slate-800 grayscale" : "bg-sky-600/20"
-                      }`}>
-                        {FILE_TYPES.find((ft) => ft.id === batch.file_type)?.icon || "📄"}
+                  <div key={batch.id}>
+                    <div
+                      className={`flex items-center justify-between rounded-xl border p-4 transition-all ${
+                        batch.undone_at
+                          ? "border-slate-800/50 bg-slate-900/30 opacity-50"
+                          : editingBatchId === batch.id
+                          ? "border-sky-600 bg-slate-900/80 ring-1 ring-sky-600/30"
+                          : "border-slate-800 bg-slate-900/50 hover:border-slate-700 cursor-pointer"
+                      }`}
+                      onClick={() => !batch.undone_at && openBatchEdit(batch)}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg ${
+                          batch.undone_at ? "bg-slate-800 grayscale" : "bg-sky-600/20"
+                        }`}>
+                          {FILE_TYPES.find((ft) => ft.id === batch.file_type)?.icon || "📄"}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-white">
+                            {batch.filename}
+                            {batch.undone_at && <span className="text-red-400 text-xs ml-2">(annullato)</span>}
+                          </p>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            {batch.rows_imported} righe · {batch.period} · {new Date(batch.imported_at).toLocaleString("it-IT")}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-white">
-                          {batch.filename}
-                          {batch.undone_at && <span className="text-red-400 text-xs ml-2">(annullato)</span>}
-                        </p>
-                        <p className="text-xs text-slate-500 mt-0.5">
-                          {batch.rows_imported} righe · {batch.period} · {new Date(batch.imported_at).toLocaleString("it-IT")}
-                        </p>
+
+                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        {!batch.undone_at && (
+                          <>
+                            <button
+                              onClick={() => openBatchEdit(batch)}
+                              className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors ${
+                                editingBatchId === batch.id
+                                  ? "text-sky-300 bg-sky-950/50 border border-sky-700/50"
+                                  : "text-sky-400 hover:text-sky-300 bg-sky-950/30 hover:bg-sky-950/50 border border-sky-900/30"
+                              }`}
+                            >
+                              {editingBatchId === batch.id ? "▼ Chiudi" : "✏️ Modifica"}
+                            </button>
+                            <button
+                              onClick={() => undoImport(batch.id)}
+                              disabled={undoing === batch.id}
+                              className="px-4 py-2 text-xs font-medium text-red-400 hover:text-red-300 bg-red-950/30 hover:bg-red-950/50 border border-red-900/30 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                              {undoing === batch.id ? "Annullamento..." : "↩ Annulla"}
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
 
-                    {!batch.undone_at && (
-                      <button
-                        onClick={() => undoImport(batch.id)}
-                        disabled={undoing === batch.id}
-                        className="px-4 py-2 text-xs font-medium text-red-400 hover:text-red-300 bg-red-950/30 hover:bg-red-950/50 border border-red-900/30 rounded-lg transition-colors disabled:opacity-50"
-                      >
-                        {undoing === batch.id ? "Annullamento..." : "↩ Annulla Import"}
-                      </button>
+                    {/* Expanded edit area */}
+                    {editingBatchId === batch.id && !batch.undone_at && (
+                      <div className="mt-2 rounded-xl border border-slate-800 bg-slate-900/70 overflow-hidden">
+                        {historyLoading ? (
+                          <div className="flex flex-col items-center justify-center py-12 gap-3">
+                            <div className="animate-spin w-8 h-8 border-2 border-sky-500 border-t-transparent rounded-full" />
+                            <p className="text-slate-400 text-sm">Caricamento righe...</p>
+                          </div>
+                        ) : (
+                          <div>
+                            {/* Edit header */}
+                            <div className="flex items-center justify-between px-4 py-3 bg-slate-800/50 border-b border-slate-800">
+                              <p className="text-xs text-slate-400">
+                                {historyRows.length} righe · Modifica le celle e salva
+                              </p>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={closeHistoryEdit}
+                                  className="px-3 py-1.5 text-xs text-slate-400 hover:text-white bg-slate-800 rounded-lg transition-colors"
+                                >
+                                  ✕ Chiudi
+                                </button>
+                                <button
+                                  onClick={saveHistoryEdit}
+                                  disabled={historySaving || historyRows.length === 0}
+                                  className="px-4 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                                >
+                                  {historySaving ? (
+                                    <>
+                                      <div className="animate-spin w-3 h-3 border-2 border-white border-t-transparent rounded-full" />
+                                      Salvataggio...
+                                    </>
+                                  ) : (
+                                    <>✓ Salva Modifiche</>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Editable table */}
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="bg-slate-800/40">
+                                    {historyColumns.map((col) => (
+                                      <th key={col.key} className="px-3 py-2 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">
+                                        {col.label}
+                                      </th>
+                                    ))}
+                                    <th className="px-3 py-2 w-10" />
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-800/50">
+                                  {historyRows.map((row, rowIdx) => (
+                                    <tr key={rowIdx} className="hover:bg-slate-800/30 transition-colors">
+                                      {historyColumns.map((col) => (
+                                        <td key={col.key} className="px-3 py-1.5">
+                                          {col.editable ? (
+                                            <input
+                                              type={col.type === "text" ? "text" : "number"}
+                                              step={col.type === "currency" || col.type === "percent" ? "0.01" : "1"}
+                                              value={row[col.key] ?? ""}
+                                              onChange={(e) => updateHistoryCell(rowIdx, col.key, e.target.value)}
+                                              className="w-full bg-transparent border border-transparent hover:border-slate-700 focus:border-sky-500 rounded px-2 py-1 text-sm text-white font-mono focus:outline-none focus:ring-1 focus:ring-sky-500/50 transition-colors"
+                                            />
+                                          ) : (
+                                            <span className="px-2 py-1 text-slate-400 font-mono text-sm">
+                                              {row[col.key]}
+                                            </span>
+                                          )}
+                                        </td>
+                                      ))}
+                                      <td className="px-2 py-1.5">
+                                        <button
+                                          onClick={() => deleteHistoryRow(rowIdx)}
+                                          className="text-red-500/50 hover:text-red-400 transition-colors p-1"
+                                          title="Elimina riga"
+                                        >
+                                          ✕
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+
+                            {/* Footer with add row + totals */}
+                            <div className="border-t border-slate-800 px-4 py-3 flex items-center justify-between">
+                              <button
+                                onClick={addHistoryRow}
+                                className="text-xs text-sky-500 hover:text-sky-400 font-medium flex items-center gap-1"
+                              >
+                                + Aggiungi riga
+                              </button>
+                              <div className="text-xs text-slate-500 font-mono flex gap-4">
+                                {historyFileType === "sales_by_category" ? (
+                                  <>
+                                    <span>Netto: €{historyRows.reduce((s, r) => s + (r.net_sales || 0), 0).toFixed(2)}</span>
+                                    <span>IVA: €{historyRows.reduce((s, r) => s + (r.vat_amount || 0), 0).toFixed(2)}</span>
+                                    <span>Totale: €{historyRows.reduce((s, r) => s + (r.sales_with_vat || 0), 0).toFixed(2)}</span>
+                                  </>
+                                ) : historyFileType === "bank_movements" ? (
+                                  <>
+                                    <span>Entrate: €{historyRows.filter(r => r.amount > 0).reduce((s, r) => s + r.amount, 0).toFixed(2)}</span>
+                                    <span>Uscite: €{historyRows.filter(r => r.amount < 0).reduce((s, r) => s + Math.abs(r.amount), 0).toFixed(2)}</span>
+                                    <span>Saldo: €{historyRows.reduce((s, r) => s + (r.amount || 0), 0).toFixed(2)}</span>
+                                  </>
+                                ) : historyFileType === "amex_statement" ? (
+                                  <>
+                                    <span>Addebiti: €{historyRows.filter(r => (r.amount_eur || 0) > 0).reduce((s, r) => s + r.amount_eur, 0).toFixed(2)}</span>
+                                    <span>Accrediti: €{historyRows.filter(r => (r.amount_eur || 0) < 0).reduce((s, r) => s + Math.abs(r.amount_eur), 0).toFixed(2)}</span>
+                                    <span>{historyRows.length} operazioni</span>
+                                  </>
+                                ) : historyFileType === "payroll" ? (
+                                  <>
+                                    <span>{historyRows.length} dipendenti</span>
+                                    <span>Tot. Lordo: €{historyRows.reduce((s, r) => s + (r.gross_pay || 0), 0).toFixed(2)}</span>
+                                    <span>Tot. Netto: €{historyRows.reduce((s, r) => s + (r.net_pay || 0), 0).toFixed(2)}</span>
+                                    <span>Tot. TFR: €{historyRows.reduce((s, r) => s + (r.tfr_month || 0), 0).toFixed(2)}</span>
+                                  </>
+                                ) : (
+                                  <span>{historyRows.length} righe</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                 ))}
