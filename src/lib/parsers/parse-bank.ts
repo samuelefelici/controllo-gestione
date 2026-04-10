@@ -118,20 +118,20 @@ function classifyTransaction(
  * Le entrate non vengono categorizzate (restano con la causale originale).
  */
 const COST_RULES: { label: string; keywords: RegExp }[] = [
-  { label: "AFFITTO",                   keywords: /affitto|locazione|canone\s*locaz|pigione|immobil/i },
-  { label: "STIPENDIO",                 keywords: /stipend|emolument|retribuzion|busta\s*paga|cedolino|salari|competenz[ae]\s*(mese|mensil)|accredito\s*stip/i },
-  { label: "LUCE",                      keywords: /enel|energia\s*elettr|luce|electric|a2a\s*energi|iren\s*luce|edison|hera\s*comm|sorgenia|engie|plenitude|e[\s-]?distribuz/i },
-  { label: "ACQUA",                     keywords: /acqua|idric|acquedotto|aqp|acea|hera\s*acqua|abbanoa|publiacqua|consorzio.*acqua/i },
-  { label: "ERPLEY",                    keywords: /erply|erpley/i },
-  { label: "COMMERCIALISTA",            keywords: /commercialist|consulen[tz].*fiscal|studio.*(?:associat|commerc|profess)|dott\.?\s|ragionier|tributar/i },
-  { label: "AGENZIA DELLE ENTRATE",     keywords: /agenz.*entrat|fisco|tribut|irpef|iva\s*periodic|f24|mod\.\s*f24|imposta|tassa\s*(?:governat|erarial)|erario|ravvedimento/i },
-  { label: "SPESE BANCARIE",            keywords: /commissioni|canone.*(?:conto|carta|pos|bancomat)|spese\s*(?:bancar|conto|tenut)|bolli|imposta.*bollo|recupero\s*bolli|interessi\s*(?:debitor|passiv)/i },
-  { label: "COSE PULIZIA",              keywords: /pulizi[ae]|igienizz|detergent|sanific|cleaning|impresa\s*puliz/i },
-  { label: "CARTA STAMPA",              keywords: /carta|stampa|tipograf|rotoli|scontrin|ricevut.*fiscal|registratore\s*(?:cassa|telematic)|print/i },
-  { label: "COSE PER RIPARAZIONE SPRAY", keywords: /riparazion|spray|manutenzion.*(?:cellu|phone|smartph)|ricambi|accessori\s*(?:cellu|phone)|pezzi\s*ricambio/i },
-  { label: "TARI (SPAZZATURA) ANUALE",  keywords: /tari|spazzatura|rifiut|nettezza|igiene\s*urban|raccolta.*differenz/i },
-  { label: "CANONE RAI",                keywords: /canone\s*(?:rai|tv|televisiv)|rai\s*canone/i },
-  { label: "ABBONAMENTI",               keywords: /abbonam|subscri|netflix|spotify|amazon\s*prime|microsoft\s*365|google\s*workspace|adobe|software\s*(?:licen|canone)|saas|cloud/i },
+  { label: "Affitto",                    keywords: /affitto|locazione|canone\s*locaz|pigione|immobil/i },
+  { label: "Stipendi",                   keywords: /stipend|emolument|retribuzion|busta\s*paga|cedolino|salari|competenz[ae]\s*(mese|mensil)|accredito\s*stip/i },
+  { label: "Energia Elettrica",          keywords: /enel|energia\s*elettr|luce|electric|a2a\s*energi|iren\s*luce|edison|hera\s*comm|sorgenia|engie|plenitude|e[\s-]?distribuz/i },
+  { label: "Acqua",                      keywords: /acqua|idric|acquedotto|aqp|acea|hera\s*acqua|abbanoa|publiacqua|consorzio.*acqua/i },
+  { label: "Erply (Software POS)",       keywords: /erply|erpley/i },
+  { label: "Commercialista",             keywords: /commercialist|consulen[tz].*fiscal|studio.*(?:associat|commerc|profess)|dott\.?\s|ragionier|tributar/i },
+  { label: "Agenzia delle Entrate",      keywords: /agenz.*entrat|fisco|tribut|irpef|iva\s*periodic|f24|mod\.\s*f24|imposta|tassa\s*(?:governat|erarial)|erario|ravvedimento/i },
+  { label: "Spese Bancarie",             keywords: /commissioni|canone.*(?:conto|carta|pos|bancomat)|spese\s*(?:bancar|conto|tenut)|bolli|imposta.*bollo|recupero\s*bolli|interessi\s*(?:debitor|passiv)/i },
+  { label: "Pulizia e Igiene",           keywords: /pulizi[ae]|igienizz|detergent|sanific|cleaning|impresa\s*puliz/i },
+  { label: "Carta e Stampa",             keywords: /carta|stampa|tipograf|rotoli|scontrin|ricevut.*fiscal|registratore\s*(?:cassa|telematic)|print/i },
+  { label: "Riparazioni e Ricambi",      keywords: /riparazion|spray|manutenzion.*(?:cellu|phone|smartph)|ricambi|accessori\s*(?:cellu|phone)|pezzi\s*ricambio/i },
+  { label: "TARI (Rifiuti)",             keywords: /tari|spazzatura|rifiut|nettezza|igiene\s*urban|raccolta.*differenz/i },
+  { label: "Canone RAI",                 keywords: /canone\s*(?:rai|tv|televisiv)|rai\s*canone/i },
+  { label: "Abbonamenti",                keywords: /abbonam|subscri|netflix|spotify|amazon\s*prime|microsoft\s*365|google\s*workspace|adobe|software\s*(?:licen|canone)|saas|cloud/i },
 ];
 
 function classifyCostCategory(
@@ -152,7 +152,7 @@ function classifyCostCategory(
     causale === "CANONE P.O.S." ||
     causale === "RECUPERO BOLLI"
   ) {
-    return "SPESE BANCARIE";
+    return "Spese Bancarie";
   }
 
   // Cerca match con le regole
@@ -162,7 +162,7 @@ function classifyCostCategory(
     }
   }
 
-  return "ALTRE SPESE";
+  return "Altre Spese";
 }
 
 // ─── Parse helpers ───────────────────────────────────────────────────────────
