@@ -16,6 +16,8 @@ const PRESET_CATEGORIES = [
   "Canone RAI",
   "By Air Ticket",
   "Baluwo",
+  "Internet",
+  "Money Transfer",
 ];
 
 /* GET — list bank categories for a client (auto-seeds preset on first call) */
