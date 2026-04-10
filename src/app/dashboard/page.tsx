@@ -281,8 +281,9 @@ function DashboardContent() {
                   { label: "Personale (lordo + TFR)", value: comp.total_costi_personale, color: "#f59e0b", icon: "👥" },
                   { label: "Uscite C/C Bancario", value: comp.total_spese_banca, color: "#ef4444", icon: "🏦" },
                   { label: "Addebiti Amex", value: comp.total_spese_amex, color: "#8b5cf6", icon: "💳" },
+                  { label: "Fatture Fornitori", value: data.invoices?.total || 0, color: "#f97316", icon: "🧾" },
                 ].map((item, i) => {
-                  const total = (comp.total_costi_personale || 0) + (comp.total_spese_banca || 0) + (comp.total_spese_amex || 0);
+                  const total = (comp.total_costi_personale || 0) + (comp.total_spese_banca || 0) + (comp.total_spese_amex || 0) + (data.invoices?.total || 0);
                   const pct = total > 0 ? ((item.value || 0) / total * 100) : 0;
                   return (
                     <div key={i} className="flex items-center gap-4">
@@ -429,11 +430,12 @@ function DashboardContent() {
         ══════════════════════════════════════════════════════ */}
         {tab === "costs" && (
           <>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
               <KPI icon="👥" label="Personale" value={fmt(comp.total_costi_personale || 0)} sub={`${(inc.staff_on_sales || 0).toFixed(1)}% del fatturato`} color="text-amber-400" />
               <KPI icon="🏦" label="Uscite Banca" value={fmt(comp.total_spese_banca || 0)} change={ch.bank_out} color="text-red-400" />
               <KPI icon="💳" label="Addebiti Amex" value={fmt(comp.total_spese_amex || 0)} change={ch.amex} color="text-purple-400" />
-              <KPI icon="📊" label="Costi Totali" value={fmt((comp.total_costi_personale || 0) + (comp.total_spese_banca || 0) + (comp.total_spese_amex || 0))} color="text-red-500" />
+              <KPI icon="🧾" label="Fatture Fornitori" value={fmt(data.invoices?.total || 0)} sub={`${data.invoices?.count || 0} fatture`} change={ch.invoices} color="text-orange-400" />
+              <KPI icon="📊" label="Costi Totali" value={fmt((comp.total_costi_personale || 0) + (comp.total_spese_banca || 0) + (comp.total_spese_amex || 0) + (data.invoices?.total || 0))} color="text-red-500" />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -448,6 +450,23 @@ function DashboardContent() {
                         <span className="text-xs text-slate-400 flex-1 truncate">{item.name}</span>
                         <span className="text-xs font-mono font-semibold text-red-400">{fmt(item.value)}</span>
                         <MiniBar value={item.value} max={data.bank.cost_breakdown[0]?.value || 1} color={COLORS[i % COLORS.length]} />
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
+
+              {/* Invoices breakdown by category */}
+              {data.invoices?.by_category?.length > 0 && (
+                <Card className="p-5">
+                  <h3 className="text-sm font-semibold text-white mb-4">Fatture per Categoria</h3>
+                  <div className="space-y-2.5">
+                    {data.invoices.by_category.map((item: any, i: number) => (
+                      <div key={i} className="flex items-center gap-3">
+                        <div className="w-2 h-2 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
+                        <span className="text-xs text-slate-400 flex-1 truncate">{item.name}</span>
+                        <span className="text-xs font-mono font-semibold text-orange-400">{fmt(item.value)}</span>
+                        <MiniBar value={item.value} max={data.invoices.by_category[0]?.value || 1} color={COLORS[i % COLORS.length]} />
                       </div>
                     ))}
                   </div>
@@ -477,7 +496,56 @@ function DashboardContent() {
                   </div>
                 </Card>
               )}
+
+              {/* Invoices by supplier */}
+              {data.invoices?.by_supplier?.length > 0 && (
+                <Card className="p-5">
+                  <h3 className="text-sm font-semibold text-white mb-4">Fatture per Fornitore</h3>
+                  <div className="space-y-2.5">
+                    {data.invoices.by_supplier.map((item: any, i: number) => (
+                      <div key={i} className="flex items-center gap-3">
+                        <div className="w-2 h-2 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
+                        <span className="text-xs text-slate-400 flex-1 truncate">{item.name}</span>
+                        <span className="text-xs font-mono font-semibold text-orange-400">{fmt(item.value)}</span>
+                        <MiniBar value={item.value} max={data.invoices.by_supplier[0]?.value || 1} color={COLORS[i % COLORS.length]} />
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
             </div>
+
+            {/* Invoice detail list */}
+            {data.invoices?.data?.length > 0 && (
+              <Card className="overflow-hidden">
+                <div className="px-5 py-3 border-b border-slate-800/60 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-white">Dettaglio Fatture Fornitori</h3>
+                  <span className="text-xs text-slate-500 font-mono">{data.invoices.count} fatture · {fmt(data.invoices.total)}</span>
+                </div>
+                <div className="max-h-[400px] overflow-y-auto">
+                  <table className="w-full text-xs">
+                    <thead className="sticky top-0 bg-slate-900">
+                      <tr className="border-b border-slate-800 text-slate-500">
+                        <th className="text-left p-3 font-medium">Fornitore</th>
+                        <th className="text-left p-3 font-medium">Categoria</th>
+                        <th className="text-right p-3 font-medium">Importo</th>
+                        <th className="text-left p-3 font-medium">Note</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.invoices.data.map((inv: any, i: number) => (
+                        <tr key={i} className="border-b border-slate-800/20 hover:bg-slate-800/20">
+                          <td className="p-3 text-slate-300 font-medium">{inv.supplier_name}</td>
+                          <td className="p-3"><span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[10px]">{inv.category_name || "—"}</span></td>
+                          <td className="p-3 text-right font-mono font-semibold text-orange-400">{fmt2(inv.amount)}</td>
+                          <td className="p-3 text-slate-500 max-w-[200px] truncate">{inv.notes || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            )}
 
             {/* Amex transaction list */}
             {data.amex?.transactions?.length > 0 && (
@@ -838,7 +906,16 @@ function DashboardContent() {
                 </div>
               )}
 
-              {/* Expense lines */}
+              {/* Fatture Fornitori */}
+              {(data.invoices?.by_category || []).map((cat: any, i: number) => (
+                <div key={`inv-${i}`} className="flex justify-between px-5 py-3 border-b border-slate-800/30 text-sm hover:bg-slate-800/10 transition">
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-500">🧾</span>
+                    <span className="text-slate-300">{cat.name || "Fatture varie"}</span>
+                  </div>
+                  <span className="font-mono font-semibold text-red-400">-{fmt2(cat.value)}</span>
+                </div>
+              ))}
               {(data.expenses || []).map((e: any, i: number) => (
                 <div key={i} className="flex justify-between px-5 py-3 border-b border-slate-800/30 text-sm hover:bg-slate-800/10 transition">
                   <div className="flex items-center gap-2">
@@ -852,7 +929,7 @@ function DashboardContent() {
 
               {/* Total costi */}
               {(() => {
-                const totCosti = (comp.total_costi_personale || 0) + (comp.total_spese_banca || 0) + (comp.total_spese_amex || 0) + (data.expenses || []).reduce((s: number, e: any) => s + e.amount, 0);
+                const totCosti = (comp.total_costi_personale || 0) + (comp.total_spese_banca || 0) + (comp.total_spese_amex || 0) + (data.invoices?.total || 0) + (data.expenses || []).reduce((s: number, e: any) => s + e.amount, 0);
                 const totRicavi = (sa.total_net_sales || 0) + (data.bank?.income_breakdown || []).filter((b: any) => b.name !== "INCASSO").reduce((s: number, b: any) => s + b.value, 0) + (data.revenues || []).reduce((s: number, r: any) => s + r.amount, 0);
                 const margine = totRicavi - totCosti;
                 return (

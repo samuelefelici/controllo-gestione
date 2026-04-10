@@ -49,6 +49,15 @@ async function fetchBatchRows(sb: ReturnType<typeof getServiceSupabase>, batch: 
       if (error) throw error;
       return data || [];
     }
+    case "invoices": {
+      const { data, error } = await sb
+        .from("invoices")
+        .select("*")
+        .eq("import_batch_id", batchId)
+        .order("supplier_name", { ascending: true });
+      if (error) throw error;
+      return data || [];
+    }
     default:
       return [];
   }
@@ -159,6 +168,14 @@ export async function PUT(
         if (error) throw error;
         break;
       }
+      case "invoices": {
+        const { error } = await sb
+          .from("invoices")
+          .delete()
+          .eq("import_batch_id", batchId);
+        if (error) throw error;
+        break;
+      }
     }
 
     // 2. Re-insert edited rows
@@ -253,6 +270,22 @@ export async function PUT(
         });
         for (let i = 0; i < insertRows.length; i += 50) {
           const { error } = await sb.from("payroll").insert(insertRows.slice(i, i + 50));
+          if (error) throw error;
+        }
+        break;
+      }
+      case "invoices": {
+        const insertRows = rows.map((row: any) => ({
+          client_id,
+          import_batch_id: batchId,
+          period,
+          supplier_name: row.supplier_name || "",
+          category_name: row.category_name || "",
+          amount: row.amount ?? 0,
+          notes: row.notes || "",
+        }));
+        for (let i = 0; i < insertRows.length; i += 50) {
+          const { error } = await sb.from("invoices").insert(insertRows.slice(i, i + 50));
           if (error) throw error;
         }
         break;

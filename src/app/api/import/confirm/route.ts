@@ -198,6 +198,53 @@ export async function POST(request: NextRequest) {
         break;
       }
 
+      case "invoices": {
+        const insertRows = rows.map((row: any) => ({
+          client_id,
+          import_batch_id: batch.id,
+          period,
+          supplier_name: row.supplier_name || "",
+          category_name: row.category_name || "",
+          amount: row.amount ?? 0,
+          notes: row.notes || "",
+        }));
+
+        // Auto-save suppliers for future autocomplete
+        const uniqueSuppliers = [...new Set(insertRows.map((r: any) => r.supplier_name).filter(Boolean))];
+        for (const name of uniqueSuppliers) {
+          await sb.from("suppliers").upsert(
+            { client_id, name },
+            { onConflict: "client_id,name" }
+          );
+        }
+
+        // Auto-save categories for future autocomplete
+        const uniqueCategories = [...new Set(insertRows.map((r: any) => r.category_name).filter(Boolean))];
+        for (const name of uniqueCategories) {
+          await sb.from("invoice_categories").upsert(
+            { client_id, name },
+            { onConflict: "client_id,name" }
+          );
+        }
+
+        for (let i = 0; i < insertRows.length; i += 50) {
+          const chunk = insertRows.slice(i, i + 50);
+          const { error: insertError } = await sb
+            .from("invoices")
+            .insert(chunk);
+
+          if (insertError) {
+            await sb.from("import_batches").delete().eq("id", batch.id);
+            console.error("Insert error:", insertError);
+            return NextResponse.json(
+              { error: "Errore durante il salvataggio", details: insertError.message },
+              { status: 500 }
+            );
+          }
+        }
+        break;
+      }
+
       default:
         await sb.from("import_batches").delete().eq("id", batch.id);
         return NextResponse.json(

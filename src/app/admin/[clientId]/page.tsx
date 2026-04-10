@@ -38,6 +38,7 @@ const FILE_TYPES = [
   { id: "bank_movements", label: "Movimenti Bancari", desc: "PDF Lista Movimenti dalla banca", icon: "🏦", accept: ".pdf" },
   { id: "amex_statement", label: "Estratto Conto Amex", desc: "PDF da American Express", icon: "💳", accept: ".pdf" },
   { id: "payroll", label: "Cedolini Paga", desc: "PDF da TeamSystem o simili", icon: "👥", accept: ".pdf" },
+  { id: "invoices", label: "Fatture Fornitori", desc: "Inserimento manuale fatture", icon: "🧾", accept: "" },
 ];
 
 /* --- Main Page --- */
@@ -74,10 +75,18 @@ export default function ClientManagePage() {
   const [shareLoading, setShareLoading] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
 
+  // Invoice manual entry state
+  const [invoiceMode, setInvoiceMode] = useState(false);
+  const [invoiceRows, setInvoiceRows] = useState<Record<string, any>[]>([]);
+  const [invoiceSaving, setInvoiceSaving] = useState(false);
+  const [suppliers, setSuppliers] = useState<string[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+
   useEffect(() => {
     loadClientInfo();
     loadBatches();
     loadShareToken();
+    loadSuppliersAndCategories();
   }, [clientId]);
 
   async function loadClientInfo() {
@@ -104,6 +113,21 @@ export default function ClientManagePage() {
     if (res.ok) {
       const data = await res.json();
       setShareToken(data.share_token || null);
+    }
+  }
+
+  async function loadSuppliersAndCategories() {
+    const [sRes, cRes] = await Promise.all([
+      fetch(`/api/suppliers?client_id=${clientId}`),
+      fetch(`/api/invoice-categories?client_id=${clientId}`),
+    ]);
+    if (sRes.ok) {
+      const d = await sRes.json();
+      setSuppliers((d.suppliers || []).map((s: any) => s.name));
+    }
+    if (cRes.ok) {
+      const d = await cRes.json();
+      setCategories((d.categories || []).map((c: any) => c.name));
     }
   }
 
@@ -193,6 +217,75 @@ export default function ClientManagePage() {
     });
     newRow.rank = editedRows.length + 1;
     setEditedRows((prev) => [...prev, newRow]);
+  }
+
+  /* --- Invoice Manual Entry --- */
+
+  function startInvoiceMode() {
+    setInvoiceMode(true);
+    setInvoiceRows([{ supplier_name: "", category_name: "", amount: 0, notes: "" }]);
+  }
+
+  function cancelInvoiceMode() {
+    setInvoiceMode(false);
+    setInvoiceRows([]);
+  }
+
+  function updateInvoiceCell(rowIdx: number, key: string, value: string) {
+    setInvoiceRows((prev) => {
+      const next = [...prev];
+      const row = { ...next[rowIdx] };
+      if (key === "amount") {
+        row[key] = parseFloat(value) || 0;
+      } else {
+        row[key] = value;
+      }
+      next[rowIdx] = row;
+      return next;
+    });
+  }
+
+  function deleteInvoiceRow(rowIdx: number) {
+    setInvoiceRows((prev) => prev.filter((_, i) => i !== rowIdx));
+  }
+
+  function addInvoiceRow() {
+    setInvoiceRows((prev) => [...prev, { supplier_name: "", category_name: "", amount: 0, notes: "" }]);
+  }
+
+  async function confirmInvoices() {
+    const validRows = invoiceRows.filter((r) => r.supplier_name && r.amount);
+    if (validRows.length === 0) {
+      alert("Inserisci almeno una fattura con fornitore e importo.");
+      return;
+    }
+    setInvoiceSaving(true);
+    try {
+      const res = await fetch("/api/import/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          client_id: clientId,
+          file_type: "invoices",
+          filename: `Fatture ${period}`,
+          period,
+          rows: validRows,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        cancelInvoiceMode();
+        loadBatches();
+        loadSuppliersAndCategories();
+        setActiveTab("history");
+      } else {
+        alert("Errore: " + (data.error || "Salvataggio fallito"));
+      }
+    } catch (err: any) {
+      alert("Errore: " + err.message);
+    } finally {
+      setInvoiceSaving(false);
+    }
   }
 
   /* --- Confirm Import --- */
@@ -440,7 +533,7 @@ export default function ClientManagePage() {
             </div>
 
             {/* Preview not active: show upload cards */}
-            {!preview && !parsing && (
+            {!preview && !parsing && !invoiceMode && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 {FILE_TYPES.map((ft) => (
                   <div key={ft.id} className="rounded-xl border border-slate-800 bg-slate-900/50 hover:border-slate-700 p-6 transition-all">
@@ -449,24 +542,162 @@ export default function ClientManagePage() {
                       <div className="flex-1">
                         <h3 className="font-semibold text-white text-base">{ft.label}</h3>
                         <p className="text-xs text-slate-500 mt-1">{ft.desc}</p>
-                        <label className="mt-4 block">
-                          <input
-                            type="file"
-                            accept={ft.accept}
-                            className="hidden"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) handleFileUpload(ft.id, file);
-                            }}
-                          />
-                          <span className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors">
-                            Seleziona file
-                          </span>
-                        </label>
+                        {ft.id === "invoices" ? (
+                          <button
+                            onClick={startInvoiceMode}
+                            className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer bg-sky-600 text-white hover:bg-sky-500 transition-colors"
+                          >
+                            + Inserisci Fatture
+                          </button>
+                        ) : (
+                          <label className="mt-4 block">
+                            <input
+                              type="file"
+                              accept={ft.accept}
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) handleFileUpload(ft.id, file);
+                              }}
+                            />
+                            <span className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors">
+                              Seleziona file
+                            </span>
+                          </label>
+                        )}
                       </div>
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Invoice manual entry form */}
+            {invoiceMode && (
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                      🧾 Inserimento Fatture Fornitori
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {invoiceRows.length} {invoiceRows.length === 1 ? "riga" : "righe"} · Periodo: {period}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={cancelInvoiceMode}
+                      className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-white bg-slate-800 rounded-lg transition-colors"
+                    >
+                      ✕ Annulla
+                    </button>
+                    <button
+                      onClick={confirmInvoices}
+                      disabled={invoiceSaving || invoiceRows.length === 0}
+                      className="px-6 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {invoiceSaving ? (
+                        <>
+                          <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                          Salvataggio...
+                        </>
+                      ) : (
+                        <>✓ Conferma Import ({invoiceRows.filter(r => r.supplier_name && r.amount).length} fatture)</>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Datalists for autocomplete */}
+                <datalist id="supplier-list">
+                  {suppliers.map((s) => <option key={s} value={s} />)}
+                </datalist>
+                <datalist id="category-list">
+                  {categories.map((c) => <option key={c} value={c} />)}
+                </datalist>
+
+                <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-slate-800/80">
+                          <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider w-[30%]">Fornitore</th>
+                          <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider w-[25%]">Categoria</th>
+                          <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider w-[15%]">Totale €</th>
+                          <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider w-[25%]">Note</th>
+                          <th className="px-3 py-2.5 w-10" />
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/50">
+                        {invoiceRows.map((row, rowIdx) => (
+                          <tr key={rowIdx} className="hover:bg-slate-800/30 transition-colors">
+                            <td className="px-3 py-1.5">
+                              <input
+                                type="text"
+                                list="supplier-list"
+                                placeholder="Nome fornitore..."
+                                value={row.supplier_name}
+                                onChange={(e) => updateInvoiceCell(rowIdx, "supplier_name", e.target.value)}
+                                className="w-full bg-transparent border border-slate-700 hover:border-slate-600 focus:border-sky-500 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500/50 transition-colors"
+                              />
+                            </td>
+                            <td className="px-3 py-1.5">
+                              <input
+                                type="text"
+                                list="category-list"
+                                placeholder="Categoria..."
+                                value={row.category_name}
+                                onChange={(e) => updateInvoiceCell(rowIdx, "category_name", e.target.value)}
+                                className="w-full bg-transparent border border-slate-700 hover:border-slate-600 focus:border-sky-500 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500/50 transition-colors"
+                              />
+                            </td>
+                            <td className="px-3 py-1.5">
+                              <input
+                                type="number"
+                                step="0.01"
+                                placeholder="0.00"
+                                value={row.amount || ""}
+                                onChange={(e) => updateInvoiceCell(rowIdx, "amount", e.target.value)}
+                                className="w-full bg-transparent border border-slate-700 hover:border-slate-600 focus:border-sky-500 rounded px-2 py-1.5 text-sm text-white font-mono focus:outline-none focus:ring-1 focus:ring-sky-500/50 transition-colors"
+                              />
+                            </td>
+                            <td className="px-3 py-1.5">
+                              <input
+                                type="text"
+                                placeholder="Note opzionali..."
+                                value={row.notes}
+                                onChange={(e) => updateInvoiceCell(rowIdx, "notes", e.target.value)}
+                                className="w-full bg-transparent border border-slate-700 hover:border-slate-600 focus:border-sky-500 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500/50 transition-colors"
+                              />
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <button
+                                onClick={() => deleteInvoiceRow(rowIdx)}
+                                className="text-red-500/50 hover:text-red-400 transition-colors p-1"
+                                title="Elimina riga"
+                              >
+                                ✕
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="border-t border-slate-800 px-4 py-3 flex items-center justify-between">
+                    <button
+                      onClick={addInvoiceRow}
+                      className="text-xs text-sky-500 hover:text-sky-400 font-medium flex items-center gap-1"
+                    >
+                      + Aggiungi riga
+                    </button>
+                    <div className="text-xs text-slate-500 font-mono flex gap-4">
+                      <span>{invoiceRows.filter(r => r.supplier_name && r.amount).length} fatture valide</span>
+                      <span>Totale: €{invoiceRows.reduce((s, r) => s + (r.amount || 0), 0).toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -794,6 +1025,11 @@ export default function ClientManagePage() {
                                     <span>Tot. Lordo: €{historyRows.reduce((s, r) => s + (r.gross_pay || 0), 0).toFixed(2)}</span>
                                     <span>Tot. Netto: €{historyRows.reduce((s, r) => s + (r.net_pay || 0), 0).toFixed(2)}</span>
                                     <span>Tot. TFR: €{historyRows.reduce((s, r) => s + (r.tfr_month || 0), 0).toFixed(2)}</span>
+                                  </>
+                                ) : historyFileType === "invoices" ? (
+                                  <>
+                                    <span>{historyRows.length} fatture</span>
+                                    <span>Totale: €{historyRows.reduce((s, r) => s + (r.amount || 0), 0).toFixed(2)}</span>
                                   </>
                                 ) : (
                                   <span>{historyRows.length} righe</span>

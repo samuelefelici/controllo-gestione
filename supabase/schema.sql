@@ -227,6 +227,49 @@ CREATE TABLE file_uploads (
 );
 
 -- ══════════════════════════════════════════════════════════════
+-- 8b. Suppliers (fornitori salvati per riutilizzo)
+-- ══════════════════════════════════════════════════════════════
+
+CREATE TABLE suppliers (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(client_id, name)
+);
+
+-- ══════════════════════════════════════════════════════════════
+-- 8c. Invoice categories (categorie personalizzabili)
+-- ══════════════════════════════════════════════════════════════
+
+CREATE TABLE invoice_categories (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(client_id, name)
+);
+
+-- ══════════════════════════════════════════════════════════════
+-- 8d. Invoices (fatture fornitori)
+-- ══════════════════════════════════════════════════════════════
+
+CREATE TABLE invoices (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  import_batch_id UUID REFERENCES import_batches(id) ON DELETE CASCADE,
+  period TEXT NOT NULL,
+  supplier_name TEXT NOT NULL,
+  category_name TEXT NOT NULL,
+  amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX idx_invoices_client_period ON invoices(client_id, period);
+CREATE INDEX idx_invoices_batch ON invoices(import_batch_id);
+
+-- ══════════════════════════════════════════════════════════════
 -- 9. TRIGGERS
 -- ══════════════════════════════════════════════════════════════
 
@@ -266,6 +309,9 @@ ALTER TABLE bank_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE amex_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payroll ENABLE ROW LEVEL SECURITY;
 ALTER TABLE file_uploads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE suppliers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE invoice_categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Users see own clients" ON clients
   FOR SELECT USING (id IN (SELECT client_id FROM user_clients WHERE user_id = auth.uid()));
@@ -282,6 +328,9 @@ CREATE POLICY "Client data access" ON bank_transactions FOR ALL USING (user_has_
 CREATE POLICY "Client data access" ON amex_transactions FOR ALL USING (user_has_client_access(client_id));
 CREATE POLICY "Client data access" ON payroll FOR ALL USING (user_has_client_access(client_id));
 CREATE POLICY "Client data access" ON file_uploads FOR ALL USING (user_has_client_access(client_id));
+CREATE POLICY "Client data access" ON suppliers FOR ALL USING (user_has_client_access(client_id));
+CREATE POLICY "Client data access" ON invoice_categories FOR ALL USING (user_has_client_access(client_id));
+CREATE POLICY "Client data access" ON invoices FOR ALL USING (user_has_client_access(client_id));
 
 -- ══════════════════════════════════════════════════════════════
 -- 11. SEED: first client

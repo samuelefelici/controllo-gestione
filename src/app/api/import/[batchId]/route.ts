@@ -36,11 +36,26 @@ export async function DELETE(
       return NextResponse.json({ error: "Questo import è già stato annullato" }, { status: 400 });
     }
 
-    // Delete all rows linked to this batch (sales_by_category rows via CASCADE)
-    const { error: deleteError } = await sb
-      .from("sales_by_category")
-      .delete()
-      .eq("import_batch_id", batchId);
+    // Delete all rows linked to this batch based on file type
+    const fileType = batch.file_type;
+    let deleteError = null;
+
+    if (fileType === "sales_by_category") {
+      const { error } = await sb.from("sales_by_category").delete().eq("import_batch_id", batchId);
+      deleteError = error;
+    } else if (fileType === "bank_movements") {
+      const { error } = await sb.from("bank_transactions").delete().eq("client_id", batch.client_id).eq("period", batch.period);
+      deleteError = error;
+    } else if (fileType === "amex_statement") {
+      const { error } = await sb.from("amex_transactions").delete().eq("client_id", batch.client_id).eq("period", batch.period);
+      deleteError = error;
+    } else if (fileType === "payroll") {
+      const { error } = await sb.from("payroll").delete().eq("client_id", batch.client_id).eq("period", batch.period);
+      deleteError = error;
+    } else if (fileType === "invoices") {
+      const { error } = await sb.from("invoices").delete().eq("import_batch_id", batchId);
+      deleteError = error;
+    }
 
     if (deleteError) {
       console.error("Delete error:", deleteError);

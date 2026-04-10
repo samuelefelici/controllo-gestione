@@ -63,6 +63,9 @@ export async function GET(request: NextRequest) {
     { data: allSalesPeriods },
     { data: allBankPeriods },
     { data: allPayrollPeriods },
+    { data: invoicesData },
+    { data: prevInvoices },
+    { data: allInvoicePeriods },
   ] = await Promise.all([
     sb.from("monthly_summary").select("*").eq("client_id", clientId).eq("period", period).single(),
     sb.from("sales_by_category").select("*").eq("client_id", clientId).eq("period", period).order("net_sales", { ascending: false }),
@@ -80,6 +83,9 @@ export async function GET(request: NextRequest) {
     sb.from("sales_by_category").select("period").eq("client_id", clientId),
     sb.from("bank_transactions").select("period").eq("client_id", clientId),
     sb.from("payroll").select("period").eq("client_id", clientId),
+    sb.from("invoices").select("*").eq("client_id", clientId).eq("period", period).order("supplier_name", { ascending: true }),
+    sb.from("invoices").select("amount").eq("client_id", clientId).eq("period", prevPeriod),
+    sb.from("invoices").select("period").eq("client_id", clientId),
   ]);
 
   // Available periods
@@ -88,6 +94,7 @@ export async function GET(request: NextRequest) {
   (allSalesPeriods || []).forEach((s: any) => periodSet.add(s.period));
   (allBankPeriods || []).forEach((s: any) => periodSet.add(s.period));
   (allPayrollPeriods || []).forEach((s: any) => periodSet.add(s.period));
+  (allInvoicePeriods || []).forEach((s: any) => periodSet.add(s.period));
   const availablePeriods = Array.from(periodSet).sort().reverse();
 
   // Sales aggregates
@@ -178,6 +185,24 @@ export async function GET(request: NextRequest) {
     employee_count: prevPayroll?.length || 0,
   };
 
+  // Invoices aggregates
+  const invTotal = (invoicesData || []).reduce((s: number, inv: any) => s + (inv.amount || 0), 0);
+  const prevInvTotal = (prevInvoices || []).reduce((s: number, inv: any) => s + (inv.amount || 0), 0);
+
+  // Invoices by category
+  const invByCategory: Record<string, number> = {};
+  for (const inv of (invoicesData || [])) {
+    const key = inv.category_name || "Altro";
+    invByCategory[key] = (invByCategory[key] || 0) + (inv.amount || 0);
+  }
+
+  // Invoices by supplier
+  const invBySupplier: Record<string, number> = {};
+  for (const inv of (invoicesData || [])) {
+    const key = inv.supplier_name || "Altro";
+    invBySupplier[key] = (invBySupplier[key] || 0) + (inv.amount || 0);
+  }
+
   // Percentage changes
   const pctChange = (curr: number, prev: number) => prev ? ((curr - prev) / Math.abs(prev)) * 100 : null;
 
@@ -188,6 +213,7 @@ export async function GET(request: NextRequest) {
     bank_in: pctChange(ba.total_in, prevBa.total_in),
     bank_out: pctChange(ba.total_out, prevBa.total_out),
     amex: pctChange(amexAgg.total_charges, prevAmexTotal),
+    invoices: pctChange(invTotal, prevInvTotal),
   };
 
   // Incidence ratios
@@ -220,6 +246,13 @@ export async function GET(request: NextRequest) {
       aggregates: amexAgg,
       by_category: Object.entries(amexByCategory).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value),
     },
+    invoices: {
+      data: invoicesData || [],
+      total: invTotal,
+      count: (invoicesData || []).length,
+      by_category: Object.entries(invByCategory).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value),
+      by_supplier: Object.entries(invBySupplier).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value),
+    },
     trends: { monthly: allSummaries || [] },
     changes,
     incidence,
@@ -227,6 +260,7 @@ export async function GET(request: NextRequest) {
       total_costi_personale: totalCostiPersonale,
       total_spese_banca: ba.total_out,
       total_spese_amex: amexAgg.total_charges,
+      total_fatture: invTotal,
     },
     uploads: uploads || [],
   });

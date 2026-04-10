@@ -53,4 +53,10 @@ export const COLUMN_DEFS: Record<string, ColumnDef[]> = {
     { key: "tfr_month", label: "TFR €", type: "currency", editable: true },
     { key: "total_deductions", label: "Trattenute €", type: "currency", editable: true },
   ],
+  invoices: [
+    { key: "supplier_name", label: "Fornitore", type: "text", editable: true },
+    { key: "category_name", label: "Categoria", type: "text", editable: true },
+    { key: "amount", label: "Totale €", type: "currency", editable: true },
+    { key: "notes", label: "Note", type: "text", editable: true },
+  ],
 };
