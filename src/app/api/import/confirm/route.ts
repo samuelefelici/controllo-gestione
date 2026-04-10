@@ -121,16 +121,21 @@ export async function POST(request: NextRequest) {
       }
 
       case "amex_statement": {
-        const insertRows = rows.map((row: any) => ({
-          client_id,
-          period,
-          operation_date: row.operation_date,
-          booking_date: row.booking_date || row.operation_date,
-          description: (row.description || "").substring(0, 500),
-          amount_eur: row.amount_eur ?? 0,
-          category: row.category || "",
-          cost_category: row.cost_category || "",
-        }));
+        const insertRows = rows.map((row: any) => {
+          // Derive period from each row's operation_date (YYYY-MM-DD → YYYY-MM)
+          const opDate = row.operation_date || "";
+          const rowPeriod = opDate.length >= 7 ? opDate.substring(0, 7) : period;
+          return {
+            client_id,
+            period: rowPeriod,
+            operation_date: row.operation_date,
+            booking_date: row.booking_date || row.operation_date,
+            description: (row.description || "").substring(0, 500),
+            amount_eur: row.amount_eur ?? 0,
+            category: row.category || "",
+            cost_category: row.cost_category || "",
+          };
+        });
 
         for (let i = 0; i < insertRows.length; i += 50) {
           const chunk = insertRows.slice(i, i + 50);
