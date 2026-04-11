@@ -130,6 +130,7 @@ CREATE TABLE sales_by_category (
   discount_pct NUMERIC(5,2) DEFAULT 0,
   purchase_value NUMERIC(12,2) DEFAULT 0,
   sales_profit NUMERIC(12,2) DEFAULT 0,
+  revenue_type TEXT DEFAULT '',
   created_at TIMESTAMPTZ DEFAULT now()
 );
 

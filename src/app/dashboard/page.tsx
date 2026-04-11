@@ -180,26 +180,46 @@ function DashboardContent() {
         .filter((c: any) => patterns.some(p => c.name?.toUpperCase().includes(p.toUpperCase())))
         .reduce((s: number, c: any) => s + (c.value || 0), 0);
 
+    // Helper: sum sales by revenue_type
+    const salesByType = (type: string) =>
+      salesCats
+        .filter((c: any) => c.revenue_type === type)
+        .reduce((s: number, c: any) => s + (c.net_sales || 0), 0);
+
     // ── RICAVI ──
-    const venditePOS = sa.total_net_sales || 0;
-    const commissioniMT = incomeVal("COMMISSIONI");
-    const commissioniTicket = salesCatVal("COMMISSIONI TICKET", "COMMISIONI REPARAZIONE", "COMMISSIONI REPARAZIONE", "COMMISSIONI BIGLIETTERIA");
-    const luggageStorage = incomeVal("LUGGAGE", "STORAGE");
-    const ecommerce = incomeVal("ECOMMERCE");
-    const altreEntrate = incomeBD
+    // Vendita prodotti = net_sales dove revenue_type = VENDITA_PRODOTTI
+    const ricaviProdotti = salesByType("VENDITA_PRODOTTI");
+
+    // Commissioni MT = da bank.income_breakdown (WU + RIA + MG + CONNECT), NON da sales Erply
+    const ricaviMT = incomeBD
       .filter((c: any) => {
         const n = (c.name || "").toUpperCase();
-        return n !== "INCASSO" && !n.includes("COMMISSIONI") && !n.includes("LUGGAGE") && !n.includes("STORAGE") && !n.includes("ECOMMERCE");
+        return n.includes("COMMISSIONI WU") || n.includes("COMMISSIONI RIA") || n.includes("COMMISSIONI MG") || n.includes("COMMISSIONI CONNECT") || (n.includes("COMMISSIONI") && !n.includes("NEXI") && !n.includes("POS"));
+      })
+      .reduce((s: number, c: any) => s + (c.value || 0), 0);
+
+    // Commissioni servizi + biglietteria + ricariche + luggage = net_sales da Erply per quei tipi
+    const ricaviServizi = salesByType("COMMISSIONI_SERVIZI");
+    const ricaviBiglietteria = salesByType("BIGLIETTERIA");
+    const ricaviRicariche = salesByType("RICARICHE");
+    const ricaviLuggage = salesByType("LUGGAGE");
+
+    // Altre entrate bancarie non-INCASSO e non-COMMISSIONI (ecommerce, luggage app bonifici, etc.)
+    const altreEntrateBanca = incomeBD
+      .filter((c: any) => {
+        const n = (c.name || "").toUpperCase();
+        return n !== "INCASSO" && !n.includes("COMMISSIONI");
       })
       .reduce((s: number, c: any) => s + (c.value || 0), 0);
 
     const ricaviLines = [
-      { label: "Vendite Nette POS", value: venditePOS, icon: <ShoppingCart size={14} /> },
-      { label: "Commissioni MT", value: commissioniMT, icon: <Coins size={14} /> },
-      { label: "Commissioni Biglietteria/Riparazioni", value: commissioniTicket, icon: <Coins size={14} /> },
-      { label: "Luggage Storage", value: luggageStorage, icon: <Package size={14} /> },
-      { label: "Ecommerce", value: ecommerce, icon: <ShoppingCart size={14} /> },
-      { label: "Altre Entrate", value: altreEntrate, icon: <Coins size={14} /> },
+      { label: "Vendita Prodotti", value: ricaviProdotti, icon: <ShoppingCart size={14} /> },
+      { label: "Commissioni Money Transfer", value: ricaviMT, icon: <Coins size={14} /> },
+      { label: "Commissioni Servizi", value: ricaviServizi, icon: <Coins size={14} /> },
+      { label: "Biglietteria", value: ricaviBiglietteria, icon: <Coins size={14} /> },
+      { label: "Ricariche", value: ricaviRicariche, icon: <Coins size={14} /> },
+      { label: "Luggage", value: ricaviLuggage, icon: <Package size={14} /> },
+      { label: "Altre Entrate Bancarie", value: altreEntrateBanca, icon: <Landmark size={14} /> },
     ].filter(l => l.value > 0);
 
     const totaleRicavi = ricaviLines.reduce((s, l) => s + l.value, 0);

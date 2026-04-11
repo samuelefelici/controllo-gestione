@@ -184,6 +184,115 @@ function PublicDashboardContent() {
   const inc = data.incidence || {};
   const comp = data.computed || {};
 
+  /* ═══════ P&L Cascade ═══════ */
+  const pnl = useMemo(() => {
+    if (!data) return null;
+
+    const costBD = data.bank?.cost_breakdown || [];
+    const incomeBD = data.bank?.income_breakdown || [];
+    const salesCats = data.sales?.data || [];
+    const invByCat = data.invoices?.by_category || [];
+
+    const costVal = (...patterns: string[]) =>
+      costBD.filter((c: any) => patterns.some(p => c.name?.toUpperCase().includes(p.toUpperCase()))).reduce((s: number, c: any) => s + (c.value || 0), 0);
+
+    const invCatVal = (...patterns: string[]) =>
+      invByCat.filter((c: any) => patterns.some(p => c.name?.toUpperCase().includes(p.toUpperCase()))).reduce((s: number, c: any) => s + (c.value || 0), 0);
+
+    const salesByType = (type: string) =>
+      salesCats.filter((c: any) => c.revenue_type === type).reduce((s: number, c: any) => s + (c.net_sales || 0), 0);
+
+    // RICAVI
+    const ricaviProdotti = salesByType("VENDITA_PRODOTTI");
+    const ricaviMT = incomeBD.filter((c: any) => { const n = (c.name || "").toUpperCase(); return n.includes("COMMISSIONI") && !n.includes("NEXI") && !n.includes("POS"); }).reduce((s: number, c: any) => s + (c.value || 0), 0);
+    const ricaviServizi = salesByType("COMMISSIONI_SERVIZI");
+    const ricaviBiglietteria = salesByType("BIGLIETTERIA");
+    const ricaviRicariche = salesByType("RICARICHE");
+    const ricaviLuggage = salesByType("LUGGAGE");
+    const altreEntrateBanca = incomeBD.filter((c: any) => { const n = (c.name || "").toUpperCase(); return n !== "INCASSO" && !n.includes("COMMISSIONI"); }).reduce((s: number, c: any) => s + (c.value || 0), 0);
+
+    const ricaviLines = [
+      { label: "Vendita Prodotti", value: ricaviProdotti, icon: <ShoppingCart size={14} /> },
+      { label: "Commissioni Money Transfer", value: ricaviMT, icon: <Banknote size={14} /> },
+      { label: "Commissioni Servizi", value: ricaviServizi, icon: <ClipboardList size={14} /> },
+      { label: "Biglietteria", value: ricaviBiglietteria, icon: <ClipboardList size={14} /> },
+      { label: "Ricariche", value: ricaviRicariche, icon: <ClipboardList size={14} /> },
+      { label: "Luggage", value: ricaviLuggage, icon: <Package size={14} /> },
+      { label: "Altre Entrate Bancarie", value: altreEntrateBanca, icon: <Landmark size={14} /> },
+    ].filter(l => l.value > 0);
+    const totaleRicavi = ricaviLines.reduce((s, l) => s + l.value, 0);
+
+    // COSTI VARIABILI
+    const costiVariabiliLines = [
+      { label: "Acquisto Merce", value: costVal("ACQUISTO MERCE", "MERCE") + invCatVal("MERCE"), icon: <Package size={14} /> },
+      { label: "Uscite Money Transfer", value: costVal("MONEY TRANSFER"), icon: <Banknote size={14} /> },
+      { label: "Commissioni NEXI/POS", value: costVal("COMMISSIONI NEXI", "COMMISSIONI POS", "NEXI"), icon: <CreditCard size={14} /> },
+    ].filter(l => l.value > 0);
+    const totaleCostiVariabili = costiVariabiliLines.reduce((s, l) => s + l.value, 0);
+    const margineLordo = totaleRicavi - totaleCostiVariabili;
+
+    // PERSONALE
+    const stipendiTFR = (pa.total_gross || 0) + (pa.total_tfr || 0);
+    const personaleLines = [{ label: `Stipendi + TFR (${pa.employee_count || 0} dip.)`, value: stipendiTFR, icon: <Users size={14} /> }].filter(l => l.value > 0);
+    const totalePersonale = personaleLines.reduce((s, l) => s + l.value, 0);
+    const margineDopoPersonale = margineLordo - totalePersonale;
+
+    // COSTI FISSI
+    const costiFissiLines = [
+      { label: "Affitto", value: costVal("AFFITTO"), icon: <Building2 size={14} /> },
+      { label: "Energia Elettrica", value: costVal("ENERGIA", "ELETTRICA"), icon: <Landmark size={14} /> },
+      { label: "Acqua", value: costVal("ACQUA"), icon: <Landmark size={14} /> },
+      { label: "Commercialista", value: costVal("COMMERCIALISTA"), icon: <ClipboardList size={14} /> },
+      { label: "TARI (Rifiuti)", value: costVal("TARI", "RIFIUTI"), icon: <ClipboardList size={14} /> },
+      { label: "Canone RAI", value: costVal("CANONE RAI", "RAI"), icon: <ClipboardList size={14} /> },
+      { label: "Internet", value: costVal("INTERNET"), icon: <Landmark size={14} /> },
+    ].filter(l => l.value > 0);
+    const totaleCostiFissi = costiFissiLines.reduce((s, l) => s + l.value, 0);
+    const margineDopoFissi = margineDopoPersonale - totaleCostiFissi;
+
+    // COSTI OPERATIVI
+    const costiOperativiLines = [
+      { label: "Abbonamenti Vari", value: costVal("ABBONAMENTI"), icon: <ClipboardList size={14} /> },
+      { label: "Pulizia e Igiene", value: costVal("PULIZIA", "IGIENE"), icon: <ClipboardList size={14} /> },
+      { label: "Cancelleria", value: costVal("CANCELLERIA"), icon: <ClipboardList size={14} /> },
+      { label: "Riparazioni e Ricambi", value: costVal("RIPARAZIONI", "RICAMBI"), icon: <ClipboardList size={14} /> },
+      { label: "By Air Ticket", value: costVal("BY AIR TICKET"), icon: <ClipboardList size={14} /> },
+      { label: "Baluwo", value: costVal("BALUWO"), icon: <Banknote size={14} /> },
+      { label: "Altre Spese", value: costVal("ALTRE SPESE"), icon: <ClipboardList size={14} /> },
+    ].filter(l => l.value > 0);
+    const totaleCostiOperativi = costiOperativiLines.reduce((s, l) => s + l.value, 0);
+    const ebitda = margineDopoFissi - totaleCostiOperativi;
+
+    // COSTI FINANZIARI
+    const costiFinLines: { label: string; value: number; icon: any }[] = [
+      { label: "Spese Bancarie", value: costVal("SPESE BANCARIE"), icon: <Landmark size={14} /> },
+    ].filter(l => l.value > 0);
+
+    const usedPatterns = ["ACQUISTO MERCE","MERCE","MONEY TRANSFER","COMMISSIONI NEXI","COMMISSIONI POS","NEXI","AFFITTO","ENERGIA","ELETTRICA","ACQUA","COMMERCIALISTA","TARI","RIFIUTI","CANONE RAI","RAI","INTERNET","ABBONAMENTI","PULIZIA","IGIENE","CANCELLERIA","RIPARAZIONI","RICAMBI","BY AIR TICKET","BALUWO","ALTRE SPESE","SPESE BANCARIE","NON CLASSIFICATO"];
+    const residualCosts = costBD.filter((c: any) => !usedPatterns.some(p => (c.name || "").toUpperCase().includes(p))).reduce((s: number, c: any) => s + (c.value || 0), 0);
+    if (residualCosts > 0) costiFinLines.push({ label: "Altri costi", value: residualCosts, icon: <ClipboardList size={14} /> });
+    const invAltro = invByCat.filter((c: any) => !(c.name || "").toUpperCase().includes("MERCE")).reduce((s: number, c: any) => s + (c.value || 0), 0);
+    if (invAltro > 0) costiFinLines.push({ label: "Fatture Fornitori (Altro)", value: invAltro, icon: <Receipt size={14} /> });
+    const totaleCostiFinanziari = costiFinLines.reduce((s, l) => s + l.value, 0);
+    const risultatoNetto = ebitda - totaleCostiFinanziari;
+
+    const margineLordoPct = totaleRicavi > 0 ? (margineLordo / totaleRicavi) * 100 : 0;
+    const ebitdaPct = totaleRicavi > 0 ? (ebitda / totaleRicavi) * 100 : 0;
+
+    return {
+      sections: [
+        { title: "RICAVI", color: "emerald", lines: ricaviLines, subtotal: totaleRicavi, subtotalLabel: "TOTALE RICAVI" },
+        { title: "COSTI VARIABILI", color: "red", lines: costiVariabiliLines, subtotal: totaleCostiVariabili, subtotalLabel: "Totale Costi Variabili", margin: margineLordo, marginLabel: "MARGINE LORDO", marginPct: margineLordoPct },
+        { title: "PERSONALE", color: "amber", lines: personaleLines, subtotal: totalePersonale, subtotalLabel: "Totale Personale", margin: margineDopoPersonale, marginLabel: "MARGINE DOPO PERSONALE" },
+        { title: "COSTI FISSI", color: "red", lines: costiFissiLines, subtotal: totaleCostiFissi, subtotalLabel: "Totale Costi Fissi", margin: margineDopoFissi, marginLabel: "MARGINE DOPO FISSI" },
+        { title: "COSTI OPERATIVI", color: "orange", lines: costiOperativiLines, subtotal: totaleCostiOperativi, subtotalLabel: "Totale Costi Operativi", margin: ebitda, marginLabel: "EBITDA", marginPct: ebitdaPct },
+        { title: "COSTI FINANZIARI", color: "red", lines: costiFinLines, subtotal: totaleCostiFinanziari, subtotalLabel: "Totale Costi Finanziari", margin: risultatoNetto, marginLabel: "RISULTATO NETTO" },
+      ],
+      totaleRicavi,
+      risultatoNetto,
+    };
+  }, [data]);
+
   const tabs = [
     { id: "overview", label: "Panoramica", icon: <LayoutDashboard size={14} /> },
     { id: "sales", label: "Vendite", icon: <ShoppingCart size={14} /> },
@@ -757,136 +866,60 @@ function PublicDashboardContent() {
         )}
 
         {/* ═══ TAB: CONTO ECONOMICO ═══ */}
-        {tab === "pnl" && (
+        {tab === "pnl" && pnl && (
           <>
             <SectionTitle sub="Riepilogo mensile ricavi, costi e margine operativo">
               Conto Economico — {periodLabel(period)}
             </SectionTitle>
 
             <Card className="overflow-hidden">
-              <div className="bg-emerald-950/30 px-5 py-3 border-b border-slate-800/60">
-                <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Ricavi</h3>
-              </div>
-
-              <div className="flex justify-between px-5 py-3 border-b border-slate-800/30 text-sm hover:bg-slate-800/10 transition">
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-500">🛒</span>
-                  <span className="text-slate-300">Vendite Nette POS</span>
-                </div>
-                <span className="font-mono font-semibold text-emerald-400">{fmt2(sa.total_net_sales || 0)}</span>
-              </div>
-              <div className="flex justify-between px-5 py-2 border-b border-slate-800/30 text-xs hover:bg-slate-800/10 transition pl-12">
-                <span className="text-slate-500">IVA incassata</span>
-                <span className="font-mono text-slate-500">{fmt2(sa.total_vat || 0)}</span>
-              </div>
-
-              {data.bank?.income_breakdown?.filter((b: any) => b.name !== "INCASSO").length > 0 && (
-                <>
-                  {data.bank.income_breakdown.filter((b: any) => b.name !== "INCASSO").map((item: any, i: number) => (
-                    <div key={i} className="flex justify-between px-5 py-3 border-b border-slate-800/30 text-sm hover:bg-slate-800/10 transition">
-                      <div className="flex items-center gap-2">
-                        <span className="text-slate-500">🏦</span>
-                        <span className="text-slate-300">{item.name}</span>
-                      </div>
-                      <span className="font-mono font-semibold text-emerald-400">{fmt2(item.value)}</span>
-                    </div>
-                  ))}
-                </>
-              )}
-
-              {(data.revenues || []).map((r: any, i: number) => (
-                <div key={i} className="flex justify-between px-5 py-3 border-b border-slate-800/30 text-sm hover:bg-slate-800/10 transition">
-                  <div className="flex items-center gap-2">
-                    <span className="text-slate-500">💰</span>
-                    <span className="text-slate-300 capitalize">{r.source?.replace(/_/g, " ")}</span>
-                  </div>
-                  <span className="font-mono font-semibold text-emerald-400">{fmt2(r.amount)}</span>
-                </div>
-              ))}
-
-              <div className="flex justify-between px-5 py-3 bg-emerald-950/20 font-bold text-sm border-b border-slate-800/60">
-                <span className="text-emerald-400">TOTALE RICAVI</span>
-                <span className="font-mono text-emerald-400">
-                  {fmt2(
-                    (sa.total_net_sales || 0) +
-                    (data.bank?.income_breakdown || []).filter((b: any) => b.name !== "INCASSO").reduce((s: number, b: any) => s + b.value, 0) +
-                    (data.revenues || []).reduce((s: number, r: any) => s + r.amount, 0)
-                  )}
-                </span>
-              </div>
-
-              <div className="bg-red-950/30 px-5 py-3 border-b border-slate-800/60">
-                <h3 className="text-xs font-bold text-red-400 uppercase tracking-wider">Costi</h3>
-              </div>
-
-              <div className="flex justify-between px-5 py-3 border-b border-slate-800/30 text-sm hover:bg-slate-800/10 transition">
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-500">👥</span>
-                  <span className="text-slate-300">Costo del Personale (Lordo)</span>
-                  <span className="text-[10px] text-slate-600">{pa.employee_count} dip.</span>
-                </div>
-                <span className="font-mono font-semibold text-red-400">-{fmt2(pa.total_gross || 0)}</span>
-              </div>
-              <div className="flex justify-between px-5 py-2 border-b border-slate-800/30 text-xs hover:bg-slate-800/10 transition pl-12">
-                <span className="text-slate-500">TFR accantonato</span>
-                <span className="font-mono text-red-400">-{fmt2(pa.total_tfr || 0)}</span>
-              </div>
-
-              {data.bank?.cost_breakdown?.slice(0, 8).map((item: any, i: number) => (
-                <div key={i} className="flex justify-between px-5 py-3 border-b border-slate-800/30 text-sm hover:bg-slate-800/10 transition">
-                  <div className="flex items-center gap-2">
-                    <span className="text-slate-500">🏦</span>
-                    <span className="text-slate-300">{item.name}</span>
-                  </div>
-                  <span className="font-mono font-semibold text-red-400">-{fmt2(item.value)}</span>
-                </div>
-              ))}
-
-              {amex.total_charges > 0 && (
-                <div className="flex justify-between px-5 py-3 border-b border-slate-800/30 text-sm hover:bg-slate-800/10 transition">
-                  <div className="flex items-center gap-2">
-                    <span className="text-slate-500">💳</span>
-                    <span className="text-slate-300">Addebiti American Express</span>
-                    <span className="text-[10px] text-slate-600">{amex.count} op.</span>
-                  </div>
-                  <span className="font-mono font-semibold text-red-400">-{fmt2(amex.total_charges)}</span>
-                </div>
-              )}
-
-              {(data.expenses || []).map((e: any, i: number) => (
-                <div key={i} className="flex justify-between px-5 py-3 border-b border-slate-800/30 text-sm hover:bg-slate-800/10 transition">
-                  <div className="flex items-center gap-2">
-                    <span className="text-slate-500">📋</span>
-                    <span className="text-slate-300 capitalize">{e.category?.replace(/_/g, " ")}</span>
-                  </div>
-                  <span className="font-mono font-semibold text-red-400">-{fmt2(e.amount)}</span>
-                </div>
-              ))}
-
-              {(() => {
-                const totCosti = (comp.total_costi_personale || 0) + (comp.total_spese_banca || 0) + (comp.total_spese_amex || 0) + (data.expenses || []).reduce((s: number, e: any) => s + e.amount, 0);
-                const totRicavi = (sa.total_net_sales || 0) + (data.bank?.income_breakdown || []).filter((b: any) => b.name !== "INCASSO").reduce((s: number, b: any) => s + b.value, 0) + (data.revenues || []).reduce((s: number, r: any) => s + r.amount, 0);
-                const margine = totRicavi - totCosti;
+              {pnl.sections.map((sec: any, si: number) => {
+                const colorMap: Record<string, { header: string; subtotalBg: string; subtotalText: string; marginBg: string; marginText: string; lineText: string }> = {
+                  emerald: { header: "bg-emerald-950/30", subtotalBg: "bg-emerald-950/20", subtotalText: "text-emerald-400", marginBg: "bg-emerald-950/30", marginText: "text-emerald-300", lineText: "text-emerald-400" },
+                  red: { header: "bg-red-950/30", subtotalBg: "bg-red-950/20", subtotalText: "text-red-400", marginBg: "bg-red-950/30", marginText: "text-red-300", lineText: "text-red-400" },
+                  amber: { header: "bg-amber-950/30", subtotalBg: "bg-amber-950/20", subtotalText: "text-amber-400", marginBg: "bg-amber-950/30", marginText: "text-amber-300", lineText: "text-amber-400" },
+                  orange: { header: "bg-orange-950/30", subtotalBg: "bg-orange-950/20", subtotalText: "text-orange-400", marginBg: "bg-orange-950/30", marginText: "text-orange-300", lineText: "text-orange-400" },
+                };
+                const cm = colorMap[sec.color] || colorMap.red;
+                const isRicavi = si === 0;
                 return (
-                  <>
-                    <div className="flex justify-between px-5 py-3 bg-red-950/20 font-bold text-sm border-b border-slate-800/60">
-                      <span className="text-red-400">TOTALE COSTI</span>
-                      <span className="font-mono text-red-400">-{fmt2(totCosti)}</span>
+                  <div key={si}>
+                    <div className={`${cm.header} px-5 py-3 border-b border-slate-800/60`}>
+                      <h3 className={`text-xs font-bold ${cm.subtotalText} uppercase tracking-wider`}>{sec.title}</h3>
                     </div>
-                    <div className={`flex justify-between px-5 py-5 font-bold text-lg ${margine >= 0 ? "bg-emerald-950/30" : "bg-red-950/40"}`}>
-                      <div>
-                        <span className={margine >= 0 ? "text-emerald-300" : "text-red-300"}>MARGINE OPERATIVO</span>
-                        {totRicavi > 0 && (
-                          <span className="text-xs text-slate-500 ml-2">({(margine / totRicavi * 100).toFixed(1)}% dei ricavi)</span>
-                        )}
+                    {sec.lines.map((line: any, li: number) => (
+                      <div key={li} className="flex justify-between px-5 py-3 border-b border-slate-800/30 text-sm hover:bg-slate-800/10 transition">
+                        <div className="flex items-center gap-2">
+                          <span className="text-slate-500">{line.icon}</span>
+                          <span className="text-slate-300">{line.label}</span>
+                        </div>
+                        <span className={`font-mono font-semibold ${isRicavi ? "text-emerald-400" : cm.lineText}`}>
+                          {isRicavi ? "" : "-"}{fmt2(line.value)}
+                        </span>
                       </div>
-                      <span className={`font-mono ${margine >= 0 ? "text-emerald-300" : "text-red-300"}`}>
-                        {margine >= 0 ? "+" : ""}{fmt2(margine)}
+                    ))}
+                    <div className={`flex justify-between px-5 py-3 ${cm.subtotalBg} font-bold text-sm border-b border-slate-800/60`}>
+                      <span className={cm.subtotalText}>{sec.subtotalLabel}</span>
+                      <span className={`font-mono ${cm.subtotalText}`}>
+                        {isRicavi ? "" : "-"}{fmt2(sec.subtotal)}
                       </span>
                     </div>
-                  </>
+                    {sec.margin !== undefined && (
+                      <div className={`flex justify-between px-5 py-4 ${sec.margin >= 0 ? "bg-emerald-950/30" : "bg-red-950/40"} font-bold text-base border-b border-slate-800/60`}>
+                        <div>
+                          <span className={sec.margin >= 0 ? "text-emerald-300" : "text-red-300"}>{sec.marginLabel}</span>
+                          {sec.marginPct !== undefined && (
+                            <span className="text-xs text-slate-500 ml-2">({sec.marginPct.toFixed(1)}%)</span>
+                          )}
+                        </div>
+                        <span className={`font-mono ${sec.margin >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+                          {sec.margin >= 0 ? "+" : ""}{fmt2(sec.margin)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 );
-              })()}
+              })}
             </Card>
 
             {data.trends?.monthly?.length > 1 && (

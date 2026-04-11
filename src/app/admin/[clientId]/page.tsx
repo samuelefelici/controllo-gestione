@@ -49,7 +49,7 @@ export default function ClientManagePage() {
 
   const [client, setClient] = useState<ClientInfo | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"import" | "history">("import");
+  const [activeTab, setActiveTab] = useState<"import" | "history" | "sales">("import");
 
   // Preview state
   const [parsing, setParsing] = useState(false);
@@ -84,6 +84,12 @@ export default function ClientManagePage() {
 
   // Bank categories state
   const [bankCategories, setBankCategories] = useState<string[]>([]);
+
+  // Sales revenue_type state
+  const [salesRows, setSalesRows] = useState<any[]>([]);
+  const [salesLoading, setSalesLoading] = useState(false);
+  const [salesAssigning, setSalesAssigning] = useState(false);
+  const [salesPeriod, setSalesPeriod] = useState(period);
 
   useEffect(() => {
     loadClientInfo();
@@ -140,6 +146,43 @@ export default function ClientManagePage() {
     if (res.ok) {
       const d = await res.json();
       setBankCategories((d.categories || []).map((c: any) => c.name));
+    }
+  }
+
+  async function loadSalesRevenue(p?: string) {
+    const usePeriod = p || salesPeriod;
+    setSalesLoading(true);
+    try {
+      const res = await fetch(`/api/sales/revenue-type?client_id=${clientId}&period=${usePeriod}`);
+      if (res.ok) {
+        const d = await res.json();
+        setSalesRows(d.rows || []);
+      }
+    } finally {
+      setSalesLoading(false);
+    }
+  }
+
+  async function updateRevenueType(id: string, revenue_type: string) {
+    const res = await fetch("/api/sales/revenue-type", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, revenue_type }),
+    });
+    if (res.ok) {
+      setSalesRows((prev) => prev.map((r) => (r.id === id ? { ...r, revenue_type } : r)));
+    }
+  }
+
+  async function autoAssignTypes() {
+    setSalesAssigning(true);
+    try {
+      const res = await fetch(`/api/sales/assign-types?client_id=${clientId}&period=${salesPeriod}`, { method: "POST" });
+      if (res.ok) {
+        await loadSalesRevenue();
+      }
+    } finally {
+      setSalesAssigning(false);
     }
   }
 
@@ -527,6 +570,14 @@ export default function ClientManagePage() {
             }`}
           >
             📋 Storico Import ({batches.filter((b) => !b.undone_at).length})
+          </button>
+          <button
+            onClick={() => { setActiveTab("sales"); loadSalesRevenue(); }}
+            className={`px-5 py-2 rounded-md text-sm font-medium transition-colors ${
+              activeTab === "sales" ? "bg-sky-600 text-white" : "text-slate-400 hover:text-white"
+            }`}
+          >
+            🏷️ Tipo Ricavo
           </button>
         </div>
 
@@ -1080,6 +1131,119 @@ export default function ClientManagePage() {
                     )}
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* === SALES REVENUE TYPE TAB === */}
+        {activeTab === "sales" && (
+          <div>
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-lg font-bold text-white">Mappatura Tipo Ricavo</h2>
+                <p className="text-xs text-slate-500 mt-1">Assegna il tipo di ricavo a ogni categoria vendita per il P&L</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <input
+                  type="month"
+                  value={salesPeriod}
+                  onChange={(e) => { setSalesPeriod(e.target.value); loadSalesRevenue(e.target.value); }}
+                  className="bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white text-sm font-mono focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                />
+                <button
+                  onClick={autoAssignTypes}
+                  disabled={salesAssigning}
+                  className="px-4 py-2 text-sm font-medium text-amber-400 bg-amber-950/30 border border-amber-900/30 hover:bg-amber-950/50 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {salesAssigning ? "Assegnamento..." : "⚡ Auto-Assign"}
+                </button>
+              </div>
+            </div>
+
+            {salesLoading ? (
+              <div className="flex flex-col items-center justify-center py-20 gap-4">
+                <div className="animate-spin w-8 h-8 border-2 border-sky-500 border-t-transparent rounded-full" />
+                <p className="text-slate-400 text-sm">Caricamento categorie...</p>
+              </div>
+            ) : salesRows.length === 0 ? (
+              <div className="text-center py-16">
+                <p className="text-slate-500 text-sm">Nessuna categoria vendita per questo periodo</p>
+              </div>
+            ) : (
+              <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-800/80">
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Categoria</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider">Vendite Nette</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider">Qta</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider w-[260px]">Tipo Ricavo</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/50">
+                    {salesRows.map((row) => {
+                      const badgeColors: Record<string, string> = {
+                        VENDITA_PRODOTTI: "bg-sky-950 text-sky-400 border-sky-800",
+                        COMMISSIONI_MT: "bg-amber-950 text-amber-400 border-amber-800",
+                        COMMISSIONI_SERVIZI: "bg-purple-950 text-purple-400 border-purple-800",
+                        BIGLIETTERIA: "bg-emerald-950 text-emerald-400 border-emerald-800",
+                        RICARICHE: "bg-orange-950 text-orange-400 border-orange-800",
+                        LUGGAGE: "bg-indigo-950 text-indigo-400 border-indigo-800",
+                      };
+                      const badgeLabels: Record<string, string> = {
+                        VENDITA_PRODOTTI: "Prodotti",
+                        COMMISSIONI_MT: "Comm. MT",
+                        COMMISSIONI_SERVIZI: "Comm. Servizi",
+                        BIGLIETTERIA: "Biglietteria",
+                        RICARICHE: "Ricariche",
+                        LUGGAGE: "Luggage",
+                      };
+                      const bc = badgeColors[row.revenue_type] || "bg-slate-800 text-slate-400 border-slate-700";
+                      return (
+                        <tr key={row.id} className="hover:bg-slate-800/30 transition-colors">
+                          <td className="px-4 py-2.5">
+                            <div className="flex items-center gap-2">
+                              <span className="text-white font-medium">{row.category_name}</span>
+                              {row.revenue_type && (
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded border ${bc}`}>
+                                  {badgeLabels[row.revenue_type] || row.revenue_type}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-2.5 text-right font-mono text-emerald-400">
+                            €{(row.net_sales || 0).toLocaleString("it-IT", { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="px-4 py-2.5 text-right font-mono text-slate-400">
+                            {(row.sold_quantity || 0).toLocaleString("it-IT")}
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <select
+                              value={row.revenue_type || ""}
+                              onChange={(e) => updateRevenueType(row.id, e.target.value)}
+                              className="w-full bg-slate-800 border border-slate-700 hover:border-slate-600 focus:border-sky-500 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500/50 transition-colors"
+                            >
+                              <option value="">— Seleziona —</option>
+                              <option value="VENDITA_PRODOTTI">🛍️ Vendita Prodotti</option>
+                              <option value="COMMISSIONI_MT">💱 Commissioni MT</option>
+                              <option value="COMMISSIONI_SERVIZI">🔧 Commissioni Servizi</option>
+                              <option value="BIGLIETTERIA">✈️ Biglietteria</option>
+                              <option value="RICARICHE">📱 Ricariche</option>
+                              <option value="LUGGAGE">🧳 Luggage</option>
+                            </select>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                <div className="border-t border-slate-800 px-4 py-3 flex items-center justify-between">
+                  <span className="text-xs text-slate-500">{salesRows.length} categorie</span>
+                  <span className="text-xs text-slate-500 font-mono">
+                    Totale: €{salesRows.reduce((s: number, r: any) => s + (r.net_sales || 0), 0).toLocaleString("it-IT", { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
               </div>
             )}
           </div>
