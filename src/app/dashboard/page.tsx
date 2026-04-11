@@ -12,6 +12,7 @@ import {
   ShoppingCart, Users, Landmark, CreditCard, Banknote, Receipt,
   Package, Tag, BarChart3, Building2, ClipboardList,
   ArrowDownToLine, ArrowUpFromLine,
+  LayoutDashboard, Wallet, TrendingUp, FileText, Coins, X, Filter,
 } from "lucide-react";
 
 /* ═══════ Helpers ═══════ */
@@ -82,6 +83,18 @@ function MiniBar({ value, max, color = "#0ea5e9" }: { value: number; max: number
   );
 }
 
+function FilterBadge({ label, onClear }: { label: string; onClear: () => void }) {
+  return (
+    <div className="flex items-center gap-2 px-3 py-1.5 bg-sky-950/60 border border-sky-700/40 rounded-full text-xs text-sky-300 animate-in fade-in">
+      <Filter size={12} />
+      <span className="font-medium truncate max-w-[200px]">{label}</span>
+      <button onClick={onClear} className="hover:text-white transition p-0.5 rounded-full hover:bg-sky-800/50">
+        <X size={12} />
+      </button>
+    </div>
+  );
+}
+
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
   return (
@@ -111,6 +124,7 @@ function DashboardContent() {
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState("");
   const [tab, setTab] = useState("overview");
+  const [activeFilter, setActiveFilter] = useState<{ type: string; value: string } | null>(null);
 
   useEffect(() => {
     if (!clientId) return;
@@ -147,7 +161,7 @@ function DashboardContent() {
   if (!data || data.error) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 gap-4">
-        <div className="w-16 h-16 rounded-2xl bg-slate-800 flex items-center justify-center text-3xl">📊</div>
+        <div className="w-16 h-16 rounded-2xl bg-slate-800 flex items-center justify-center text-slate-500"><BarChart3 size={32} /></div>
         <p className="text-xl text-slate-400">Nessun dato disponibile</p>
         <p className="text-sm text-slate-600">Carica prima i file dal pannello di gestione</p>
         <Link href={`/admin/${clientId}`} className="mt-4 px-6 py-2 bg-sky-600 text-white rounded-xl text-sm font-semibold hover:bg-sky-500 transition">
@@ -166,12 +180,12 @@ function DashboardContent() {
   const comp = data.computed || {};
 
   const tabs = [
-    { id: "overview", label: "📊 Panoramica", shortLabel: "Panoramica" },
-    { id: "sales", label: "🛒 Vendite", shortLabel: "Vendite" },
-    { id: "costs", label: "💸 Costi", shortLabel: "Costi" },
-    { id: "payroll", label: "👥 Personale", shortLabel: "Personale" },
-    { id: "cashflow", label: "🏦 Flussi", shortLabel: "Flussi" },
-    { id: "pnl", label: "📋 Conto Economico", shortLabel: "P&L" },
+    { id: "overview", label: "Panoramica", icon: <LayoutDashboard size={14} /> },
+    { id: "sales", label: "Vendite", icon: <ShoppingCart size={14} /> },
+    { id: "costs", label: "Costi", icon: <Wallet size={14} /> },
+    { id: "payroll", label: "Personale", icon: <Users size={14} /> },
+    { id: "cashflow", label: "Flussi", icon: <Landmark size={14} /> },
+    { id: "pnl", label: "Conto Economico", icon: <FileText size={14} /> },
   ];
 
   return (
@@ -198,7 +212,7 @@ function DashboardContent() {
                 ))}
               </select>
               <Link href={`/admin/${clientId}`} className="text-xs text-slate-500 hover:text-sky-400 transition hidden sm:block">
-                ⬆ Carica file
+                <ArrowUpFromLine size={12} className="inline mr-1" />Carica file
               </Link>
             </div>
           </div>
@@ -207,15 +221,15 @@ function DashboardContent() {
             {tabs.map(t => (
               <button
                 key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`px-4 py-2.5 text-xs font-medium transition-all border-b-2 whitespace-nowrap ${
+                onClick={() => { setTab(t.id); setActiveFilter(null); }}
+                className={`px-4 py-2.5 text-xs font-medium transition-all border-b-2 whitespace-nowrap flex items-center gap-1.5 ${
                   tab === t.id
                     ? "border-sky-500 text-white"
                     : "border-transparent text-slate-500 hover:text-slate-300"
                 }`}
               >
+                {t.icon}
                 <span className="hidden sm:inline">{t.label}</span>
-                <span className="sm:hidden">{t.shortLabel}</span>
               </button>
             ))}
           </div>
@@ -224,6 +238,9 @@ function DashboardContent() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
 
+        {activeFilter && (
+          <FilterBadge label={activeFilter.value} onClear={() => setActiveFilter(null)} />
+        )}
         {/* ══════════════════════════════════════════════════════
             TAB: OVERVIEW
         ══════════════════════════════════════════════════════ */}
@@ -283,16 +300,16 @@ function DashboardContent() {
               <h3 className="text-sm font-semibold text-white mb-4">Composizione Costi del Mese</h3>
               <div className="space-y-3">
                 {[
-                  { label: "Personale (lordo + TFR)", value: comp.total_costi_personale, color: "#f59e0b", icon: "👥" },
-                  { label: "Uscite C/C Bancario", value: comp.total_spese_banca, color: "#ef4444", icon: "🏦" },
-                  { label: "Addebiti Amex", value: comp.total_spese_amex, color: "#8b5cf6", icon: "💳" },
-                  { label: "Fatture Fornitori", value: data.invoices?.total || 0, color: "#f97316", icon: "🧾" },
+                  { label: "Personale (lordo + TFR)", value: comp.total_costi_personale, color: "#f59e0b", icon: <Users size={16} /> },
+                  { label: "Uscite C/C Bancario", value: comp.total_spese_banca, color: "#ef4444", icon: <Landmark size={16} /> },
+                  { label: "Addebiti Amex", value: comp.total_spese_amex, color: "#8b5cf6", icon: <CreditCard size={16} /> },
+                  { label: "Fatture Fornitori", value: data.invoices?.total || 0, color: "#f97316", icon: <Receipt size={16} /> },
                 ].map((item, i) => {
                   const total = (comp.total_costi_personale || 0) + (comp.total_spese_banca || 0) + (comp.total_spese_amex || 0) + (data.invoices?.total || 0);
                   const pct = total > 0 ? ((item.value || 0) / total * 100) : 0;
                   return (
                     <div key={i} className="flex items-center gap-4">
-                      <span className="text-lg w-8 text-center">{item.icon}</span>
+                      <span className="w-8 text-center flex items-center justify-center text-slate-400">{item.icon}</span>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-xs text-slate-400">{item.label}</span>
@@ -329,12 +346,21 @@ function DashboardContent() {
                 <Card className="p-5">
                   <h3 className="text-sm font-semibold text-white mb-4">Vendite per Categoria</h3>
                   <ResponsiveContainer width="100%" height={Math.max(salesData.length * 28, 200)}>
-                    <BarChart data={salesData} layout="vertical" margin={{ left: 100 }}>
+                    <BarChart data={salesData} layout="vertical" margin={{ left: 100 }} onClick={(e: any) => {
+                      if (e?.activeLabel) setActiveFilter(activeFilter?.value === e.activeLabel ? null : { type: "sales_cat", value: e.activeLabel });
+                    }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                       <XAxis type="number" tick={{ fill: "#64748b", fontSize: 10 }} tickFormatter={v => fmt(v)} />
                       <YAxis dataKey="category_name" type="category" tick={{ fill: "#94a3b8", fontSize: 9 }} width={95} />
                       <Tooltip content={<CustomTooltip />} />
-                      <Bar dataKey="net_sales" name="Netto" fill="#0ea5e9" radius={[0, 4, 4, 0]} />
+                      <Bar dataKey="net_sales" name="Netto" radius={[0, 4, 4, 0]} cursor="pointer">
+                        {salesData.map((entry: any, idx: number) => (
+                          <Cell
+                            key={idx}
+                            fill={activeFilter?.type === "sales_cat" && activeFilter.value !== entry.category_name ? "#1e293b" : "#0ea5e9"}
+                          />
+                        ))}
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </Card>
@@ -394,7 +420,17 @@ function DashboardContent() {
                   </thead>
                   <tbody>
                     {(data.sales?.data || []).map((c: any, i: number) => (
-                      <tr key={i} className="border-b border-slate-800/30 hover:bg-slate-800/20 transition">
+                      <tr
+                        key={i}
+                        onClick={() => setActiveFilter(activeFilter?.type === "sales_cat" && activeFilter.value === c.category_name ? null : { type: "sales_cat", value: c.category_name })}
+                        className={`border-b border-slate-800/30 transition cursor-pointer ${
+                          activeFilter?.type === "sales_cat" && activeFilter.value === c.category_name
+                            ? "bg-sky-950/40 ring-1 ring-sky-500/30"
+                            : activeFilter?.type === "sales_cat"
+                              ? "opacity-40 hover:opacity-70"
+                              : "hover:bg-slate-800/20"
+                        }`}
+                      >
                         <td className="p-3 text-slate-600 font-mono text-xs">{i + 1}</td>
                         <td className="p-3 font-medium text-white text-xs">{c.category_name}</td>
                         <td className="p-3 text-right font-mono text-slate-400">{c.sold_quantity}</td>
@@ -443,13 +479,23 @@ function DashboardContent() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {/* Bank outflows breakdown + Merce c/acquisti */}
-              <Card className="p-5">
-                <h3 className="text-sm font-semibold text-white mb-4">Dettaglio Costi</h3>
-                {data.bank?.cost_breakdown?.length > 0 && (
+              {/* Cost breakdown by category */}
+              {data.bank?.cost_breakdown?.length > 0 && (
+                <Card className="p-5">
+                  <h3 className="text-sm font-semibold text-white mb-4">Dettaglio Costi</h3>
                   <div className="space-y-2.5">
                     {data.bank.cost_breakdown.slice(0, 12).map((item: any, i: number) => (
-                      <div key={i} className="flex items-center gap-3">
+                      <div
+                        key={i}
+                        onClick={() => setActiveFilter(activeFilter?.type === "cost_cat" && activeFilter.value === item.name ? null : { type: "cost_cat", value: item.name })}
+                        className={`flex items-center gap-3 cursor-pointer rounded-lg px-2 py-1 -mx-2 transition ${
+                          activeFilter?.type === "cost_cat" && activeFilter.value === item.name
+                            ? "bg-sky-950/50 ring-1 ring-sky-500/30"
+                            : activeFilter?.type === "cost_cat"
+                              ? "opacity-40 hover:opacity-70"
+                              : "hover:bg-slate-800/40"
+                        }`}
+                      >
                         <div className="w-2 h-2 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
                         <span className="text-xs text-slate-400 flex-1 truncate">{item.name}</span>
                         <span className="text-xs font-mono font-semibold text-red-400">{fmt(item.value)}</span>
@@ -457,12 +503,8 @@ function DashboardContent() {
                       </div>
                     ))}
                   </div>
-                )}
-                <div className="mt-4 pt-4 border-t border-slate-800/60 flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-400">Merce c/acquisti</span>
-                  <span className="text-sm font-bold font-mono text-orange-400">{fmt(data.invoices?.total || 0)}</span>
-                </div>
-              </Card>
+                </Card>
+              )}
 
               {/* Invoices by supplier */}
               {data.invoices?.by_supplier?.length > 0 && (
@@ -470,7 +512,17 @@ function DashboardContent() {
                   <h3 className="text-sm font-semibold text-white mb-4">Fatture per Fornitore</h3>
                   <div className="space-y-2.5">
                     {data.invoices.by_supplier.map((item: any, i: number) => (
-                      <div key={i} className="flex items-center gap-3">
+                      <div
+                        key={i}
+                        onClick={() => setActiveFilter(activeFilter?.type === "supplier" && activeFilter.value === item.name ? null : { type: "supplier", value: item.name })}
+                        className={`flex items-center gap-3 cursor-pointer rounded-lg px-2 py-1 -mx-2 transition ${
+                          activeFilter?.type === "supplier" && activeFilter.value === item.name
+                            ? "bg-sky-950/50 ring-1 ring-sky-500/30"
+                            : activeFilter?.type === "supplier"
+                              ? "opacity-40 hover:opacity-70"
+                              : "hover:bg-slate-800/40"
+                        }`}
+                      >
                         <div className="w-2 h-2 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
                         <span className="text-xs text-slate-400 flex-1 truncate">{item.name}</span>
                         <span className="text-xs font-mono font-semibold text-orange-400">{fmt(item.value)}</span>
@@ -500,7 +552,9 @@ function DashboardContent() {
                       </tr>
                     </thead>
                     <tbody>
-                      {data.invoices.data.map((inv: any, i: number) => (
+                      {data.invoices.data
+                        .filter((inv: any) => !activeFilter || activeFilter.type !== "supplier" || inv.supplier_name === activeFilter.value)
+                        .map((inv: any, i: number) => (
                         <tr key={i} className="border-b border-slate-800/20 hover:bg-slate-800/20">
                           <td className="p-3 text-slate-300 font-medium">{inv.supplier_name}</td>
                           <td className="p-3"><span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[10px]">{inv.category_name || "—"}</span></td>
@@ -532,7 +586,9 @@ function DashboardContent() {
                       </tr>
                     </thead>
                     <tbody>
-                      {data.amex.transactions.map((tx: any, i: number) => (
+                      {data.amex.transactions
+                        .filter((tx: any) => !activeFilter || activeFilter.type !== "cost_cat" || tx.cost_category === activeFilter.value)
+                        .map((tx: any, i: number) => (
                         <tr key={i} className="border-b border-slate-800/20 hover:bg-slate-800/20">
                           <td className="p-3 font-mono text-slate-500 whitespace-nowrap">{tx.operation_date}</td>
                           <td className="p-3 text-slate-300 max-w-[250px] truncate">{tx.description}</td>
@@ -694,10 +750,20 @@ function DashboardContent() {
               {/* Income breakdown */}
               {data.bank?.income_breakdown?.length > 0 && (
                 <Card className="p-5">
-                  <h3 className="text-sm font-semibold text-emerald-400 mb-3">📥 Entrate per Causale</h3>
+                  <h3 className="text-sm font-semibold text-emerald-400 mb-3 flex items-center gap-1.5"><ArrowDownToLine size={14} /> Entrate per Causale</h3>
                   <div className="space-y-2">
                     {data.bank.income_breakdown.slice(0, 10).map((item: any, i: number) => (
-                      <div key={i} className="flex items-center justify-between">
+                      <div
+                        key={i}
+                        onClick={() => setActiveFilter(activeFilter?.type === "causale" && activeFilter.value === item.name ? null : { type: "causale", value: item.name })}
+                        className={`flex items-center justify-between cursor-pointer rounded-lg px-2 py-1 -mx-2 transition ${
+                          activeFilter?.type === "causale" && activeFilter.value === item.name
+                            ? "bg-sky-950/50 ring-1 ring-sky-500/30"
+                            : activeFilter?.type === "causale"
+                              ? "opacity-40 hover:opacity-70"
+                              : "hover:bg-slate-800/40"
+                        }`}
+                      >
                         <span className="text-xs text-slate-400 truncate flex-1">{item.name}</span>
                         <span className="text-xs font-mono text-emerald-400 ml-3">{fmt(item.value)}</span>
                       </div>
@@ -709,10 +775,20 @@ function DashboardContent() {
               {/* Cost breakdown */}
               {data.bank?.cost_breakdown?.length > 0 && (
                 <Card className="p-5">
-                  <h3 className="text-sm font-semibold text-red-400 mb-3">📤 Uscite per Causale</h3>
+                  <h3 className="text-sm font-semibold text-red-400 mb-3 flex items-center gap-1.5"><ArrowUpFromLine size={14} /> Uscite per Causale</h3>
                   <div className="space-y-2">
                     {data.bank.cost_breakdown.slice(0, 10).map((item: any, i: number) => (
-                      <div key={i} className="flex items-center justify-between">
+                      <div
+                        key={i}
+                        onClick={() => setActiveFilter(activeFilter?.type === "causale" && activeFilter.value === item.name ? null : { type: "causale", value: item.name })}
+                        className={`flex items-center justify-between cursor-pointer rounded-lg px-2 py-1 -mx-2 transition ${
+                          activeFilter?.type === "causale" && activeFilter.value === item.name
+                            ? "bg-sky-950/50 ring-1 ring-sky-500/30"
+                            : activeFilter?.type === "causale"
+                              ? "opacity-40 hover:opacity-70"
+                              : "hover:bg-slate-800/40"
+                        }`}
+                      >
                         <span className="text-xs text-slate-400 truncate flex-1">{item.name}</span>
                         <span className="text-xs font-mono text-red-400 ml-3">{fmt(item.value)}</span>
                       </div>
@@ -740,7 +816,9 @@ function DashboardContent() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(data.bank?.transactions || []).map((tx: any, i: number) => (
+                    {(data.bank?.transactions || [])
+                      .filter((tx: any) => !activeFilter || activeFilter.type !== "causale" || tx.cost_category === activeFilter.value || tx.subcategory === activeFilter.value || tx.category === activeFilter.value)
+                      .map((tx: any, i: number) => (
                       <tr key={i} className="border-b border-slate-800/20 hover:bg-slate-800/20 transition">
                         <td className="p-3 font-mono text-slate-500 whitespace-nowrap">{tx.transaction_date}</td>
                         <td className="p-3 text-slate-300 max-w-[250px] truncate">{tx.counterpart || tx.description?.substring(0, 80)}</td>
@@ -782,7 +860,7 @@ function DashboardContent() {
               {/* Vendite POS */}
               <div className="flex justify-between px-5 py-3 border-b border-slate-800/30 text-sm hover:bg-slate-800/10 transition">
                 <div className="flex items-center gap-2">
-                  <span className="text-slate-500">🛒</span>
+                  <span className="text-slate-500"><ShoppingCart size={14} /></span>
                   <span className="text-slate-300">Vendite Nette POS</span>
                 </div>
                 <span className="font-mono font-semibold text-emerald-400">{fmt2(sa.total_net_sales || 0)}</span>
@@ -798,7 +876,7 @@ function DashboardContent() {
                   {data.bank.income_breakdown.filter((b: any) => b.name !== "INCASSO").map((item: any, i: number) => (
                     <div key={i} className="flex justify-between px-5 py-3 border-b border-slate-800/30 text-sm hover:bg-slate-800/10 transition">
                       <div className="flex items-center gap-2">
-                        <span className="text-slate-500">🏦</span>
+                        <span className="text-slate-500"><Landmark size={14} /></span>
                         <span className="text-slate-300">{item.name}</span>
                       </div>
                       <span className="font-mono font-semibold text-emerald-400">{fmt2(item.value)}</span>
@@ -811,7 +889,7 @@ function DashboardContent() {
               {(data.revenues || []).map((r: any, i: number) => (
                 <div key={i} className="flex justify-between px-5 py-3 border-b border-slate-800/30 text-sm hover:bg-slate-800/10 transition">
                   <div className="flex items-center gap-2">
-                    <span className="text-slate-500">💰</span>
+                    <span className="text-slate-500"><Coins size={14} /></span>
                     <span className="text-slate-300 capitalize">{r.source?.replace(/_/g, " ")}</span>
                     {r.notes && <span className="text-slate-600 text-xs">({r.notes})</span>}
                   </div>
@@ -839,7 +917,7 @@ function DashboardContent() {
               {/* Personale */}
               <div className="flex justify-between px-5 py-3 border-b border-slate-800/30 text-sm hover:bg-slate-800/10 transition">
                 <div className="flex items-center gap-2">
-                  <span className="text-slate-500">👥</span>
+                  <span className="text-slate-500"><Users size={14} /></span>
                   <span className="text-slate-300">Costo del Personale (Lordo)</span>
                   <span className="text-[10px] text-slate-600">{pa.employee_count} dip.</span>
                 </div>
@@ -854,7 +932,7 @@ function DashboardContent() {
               {data.bank?.cost_breakdown?.slice(0, 8).map((item: any, i: number) => (
                 <div key={i} className="flex justify-between px-5 py-3 border-b border-slate-800/30 text-sm hover:bg-slate-800/10 transition">
                   <div className="flex items-center gap-2">
-                    <span className="text-slate-500">🏦</span>
+                    <span className="text-slate-500"><Landmark size={14} /></span>
                     <span className="text-slate-300">{item.name}</span>
                   </div>
                   <span className="font-mono font-semibold text-red-400">-{fmt2(item.value)}</span>
@@ -865,7 +943,7 @@ function DashboardContent() {
               {amex.total_charges > 0 && (
                 <div className="flex justify-between px-5 py-3 border-b border-slate-800/30 text-sm hover:bg-slate-800/10 transition">
                   <div className="flex items-center gap-2">
-                    <span className="text-slate-500">💳</span>
+                    <span className="text-slate-500"><CreditCard size={14} /></span>
                     <span className="text-slate-300">Addebiti American Express</span>
                     <span className="text-[10px] text-slate-600">{amex.count} op.</span>
                   </div>
@@ -877,7 +955,7 @@ function DashboardContent() {
               {(data.invoices?.by_category || []).map((cat: any, i: number) => (
                 <div key={`inv-${i}`} className="flex justify-between px-5 py-3 border-b border-slate-800/30 text-sm hover:bg-slate-800/10 transition">
                   <div className="flex items-center gap-2">
-                    <span className="text-slate-500">🧾</span>
+                    <span className="text-slate-500"><Receipt size={14} /></span>
                     <span className="text-slate-300">{cat.name || "Fatture varie"}</span>
                   </div>
                   <span className="font-mono font-semibold text-red-400">-{fmt2(cat.value)}</span>
@@ -886,7 +964,7 @@ function DashboardContent() {
               {(data.expenses || []).map((e: any, i: number) => (
                 <div key={i} className="flex justify-between px-5 py-3 border-b border-slate-800/30 text-sm hover:bg-slate-800/10 transition">
                   <div className="flex items-center gap-2">
-                    <span className="text-slate-500">📋</span>
+                    <span className="text-slate-500"><ClipboardList size={14} /></span>
                     <span className="text-slate-300 capitalize">{e.category?.replace(/_/g, " ")}</span>
                     {e.notes && <span className="text-slate-600 text-xs">({e.notes})</span>}
                   </div>

@@ -12,6 +12,7 @@ import {
   ShoppingCart, Users, Landmark, CreditCard, Banknote, Receipt,
   Package, Tag, BarChart3, Building2, ClipboardList,
   ArrowDownToLine, ArrowUpFromLine,
+  LayoutDashboard, Wallet, TrendingUp, FileText, X, Filter,
 } from "lucide-react";
 
 /* ═══════ Helpers ═══════ */
@@ -74,6 +75,18 @@ function MiniBar({ value, max, color = "#0ea5e9" }: { value: number; max: number
   );
 }
 
+function FilterBadge({ label, onClear }: { label: string; onClear: () => void }) {
+  return (
+    <div className="flex items-center gap-2 px-3 py-1.5 bg-sky-950/60 border border-sky-700/40 rounded-full text-xs text-sky-300">
+      <Filter size={12} />
+      <span className="font-medium truncate max-w-[200px]">{label}</span>
+      <button onClick={onClear} className="hover:text-white transition p-0.5 rounded-full hover:bg-sky-800/50">
+        <X size={12} />
+      </button>
+    </div>
+  );
+}
+
 function SectionTitle({ children, sub }: { children: React.ReactNode; sub?: string }) {
   return (
     <div className="mb-4">
@@ -113,6 +126,7 @@ function PublicDashboardContent() {
   const [period, setPeriod] = useState("");
   const [tab, setTab] = useState("overview");
   const [error, setError] = useState("");
+  const [activeFilter, setActiveFilter] = useState<{ type: string; value: string } | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -171,12 +185,12 @@ function PublicDashboardContent() {
   const comp = data.computed || {};
 
   const tabs = [
-    { id: "overview", label: "📊 Panoramica", shortLabel: "Panoramica" },
-    { id: "sales", label: "🛒 Vendite", shortLabel: "Vendite" },
-    { id: "costs", label: "💸 Costi", shortLabel: "Costi" },
-    { id: "payroll", label: "👥 Personale", shortLabel: "Personale" },
-    { id: "cashflow", label: "🏦 Flussi", shortLabel: "Flussi" },
-    { id: "pnl", label: "📋 Conto Economico", shortLabel: "P&L" },
+    { id: "overview", label: "Panoramica", icon: <LayoutDashboard size={14} /> },
+    { id: "sales", label: "Vendite", icon: <ShoppingCart size={14} /> },
+    { id: "costs", label: "Costi", icon: <Wallet size={14} /> },
+    { id: "payroll", label: "Personale", icon: <Users size={14} /> },
+    { id: "cashflow", label: "Flussi", icon: <Landmark size={14} /> },
+    { id: "pnl", label: "Conto Economico", icon: <FileText size={14} /> },
   ];
 
   return (
@@ -209,15 +223,15 @@ function PublicDashboardContent() {
             {tabs.map(t => (
               <button
                 key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`px-4 py-2.5 text-xs font-medium transition-all border-b-2 whitespace-nowrap ${
+                onClick={() => { setTab(t.id); setActiveFilter(null); }}
+                className={`px-4 py-2.5 text-xs font-medium transition-all border-b-2 whitespace-nowrap flex items-center gap-1.5 ${
                   tab === t.id
                     ? "border-sky-500 text-white"
                     : "border-transparent text-slate-500 hover:text-slate-300"
                 }`}
               >
+                {t.icon}
                 <span className="hidden sm:inline">{t.label}</span>
-                <span className="sm:hidden">{t.shortLabel}</span>
               </button>
             ))}
           </div>
@@ -225,6 +239,10 @@ function PublicDashboardContent() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+
+        {activeFilter && (
+          <FilterBadge label={activeFilter.value} onClear={() => setActiveFilter(null)} />
+        )}
 
         {/* ═══ TAB: OVERVIEW ═══ */}
         {tab === "overview" && (
@@ -302,15 +320,15 @@ function PublicDashboardContent() {
               <h3 className="text-sm font-semibold text-white mb-4">Composizione Costi del Mese</h3>
               <div className="space-y-3">
                 {[
-                  { label: "Personale (lordo + TFR)", value: comp.total_costi_personale, color: "#f59e0b", icon: "👥" },
-                  { label: "Uscite C/C Bancario", value: comp.total_spese_banca, color: "#ef4444", icon: "🏦" },
-                  { label: "Addebiti Amex", value: comp.total_spese_amex, color: "#8b5cf6", icon: "💳" },
+                  { label: "Personale (lordo + TFR)", value: comp.total_costi_personale, color: "#f59e0b", icon: <Users size={16} /> },
+                  { label: "Uscite C/C Bancario", value: comp.total_spese_banca, color: "#ef4444", icon: <Landmark size={16} /> },
+                  { label: "Addebiti Amex", value: comp.total_spese_amex, color: "#8b5cf6", icon: <CreditCard size={16} /> },
                 ].map((item, i) => {
                   const total = (comp.total_costi_personale || 0) + (comp.total_spese_banca || 0) + (comp.total_spese_amex || 0);
                   const pct = total > 0 ? ((item.value || 0) / total * 100) : 0;
                   return (
                     <div key={i} className="flex items-center gap-4">
-                      <span className="text-lg w-8 text-center">{item.icon}</span>
+                      <span className="w-8 text-center flex items-center justify-center text-slate-400">{item.icon}</span>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-xs text-slate-400">{item.label}</span>
@@ -344,12 +362,21 @@ function PublicDashboardContent() {
                 <Card className="p-5">
                   <h3 className="text-sm font-semibold text-white mb-4">Vendite per Categoria</h3>
                   <ResponsiveContainer width="100%" height={Math.max(salesData.length * 28, 200)}>
-                    <BarChart data={salesData} layout="vertical" margin={{ left: 100 }}>
+                    <BarChart data={salesData} layout="vertical" margin={{ left: 100 }} onClick={(e: any) => {
+                      if (e?.activeLabel) setActiveFilter(activeFilter?.value === e.activeLabel ? null : { type: "sales_cat", value: e.activeLabel });
+                    }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                       <XAxis type="number" tick={{ fill: "#64748b", fontSize: 10 }} tickFormatter={v => fmt(v)} />
                       <YAxis dataKey="category_name" type="category" tick={{ fill: "#94a3b8", fontSize: 9 }} width={95} />
                       <Tooltip content={<CustomTooltip />} />
-                      <Bar dataKey="net_sales" name="Netto" fill="#0ea5e9" radius={[0, 4, 4, 0]} />
+                      <Bar dataKey="net_sales" name="Netto" radius={[0, 4, 4, 0]} cursor="pointer">
+                        {salesData.map((entry: any, idx: number) => (
+                          <Cell
+                            key={idx}
+                            fill={activeFilter?.type === "sales_cat" && activeFilter.value !== entry.category_name ? "#1e293b" : "#0ea5e9"}
+                          />
+                        ))}
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </Card>
@@ -407,7 +434,17 @@ function PublicDashboardContent() {
                   </thead>
                   <tbody>
                     {(data.sales?.data || []).map((c: any, i: number) => (
-                      <tr key={i} className="border-b border-slate-800/30 hover:bg-slate-800/20 transition">
+                      <tr
+                        key={i}
+                        onClick={() => setActiveFilter(activeFilter?.type === "sales_cat" && activeFilter.value === c.category_name ? null : { type: "sales_cat", value: c.category_name })}
+                        className={`border-b border-slate-800/30 transition cursor-pointer ${
+                          activeFilter?.type === "sales_cat" && activeFilter.value === c.category_name
+                            ? "bg-sky-950/40 ring-1 ring-sky-500/30"
+                            : activeFilter?.type === "sales_cat"
+                              ? "opacity-40 hover:opacity-70"
+                              : "hover:bg-slate-800/20"
+                        }`}
+                      >
                         <td className="p-3 text-slate-600 font-mono text-xs">{i + 1}</td>
                         <td className="p-3 font-medium text-white text-xs">{c.category_name}</td>
                         <td className="p-3 text-right font-mono text-slate-400">{c.sold_quantity}</td>
@@ -453,25 +490,31 @@ function PublicDashboardContent() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {data.bank?.cost_breakdown?.length > 0 && (
               <Card className="p-5">
                 <h3 className="text-sm font-semibold text-white mb-4">Dettaglio Costi</h3>
-                {data.bank?.cost_breakdown?.length > 0 && (
-                  <div className="space-y-2.5">
-                    {data.bank.cost_breakdown.slice(0, 12).map((item: any, i: number) => (
-                      <div key={i} className="flex items-center gap-3">
-                        <div className="w-2 h-2 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
-                        <span className="text-xs text-slate-400 flex-1 truncate">{item.name}</span>
-                        <span className="text-xs font-mono font-semibold text-red-400">{fmt(item.value)}</span>
-                        <MiniBar value={item.value} max={data.bank.cost_breakdown[0]?.value || 1} color={COLORS[i % COLORS.length]} />
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div className="mt-4 pt-4 border-t border-slate-800/60 flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-400">Merce c/acquisti</span>
-                  <span className="text-sm font-bold font-mono text-orange-400">{fmt(data.invoices?.total || 0)}</span>
+                <div className="space-y-2.5">
+                  {data.bank.cost_breakdown.slice(0, 12).map((item: any, i: number) => (
+                    <div
+                      key={i}
+                      onClick={() => setActiveFilter(activeFilter?.type === "cost_cat" && activeFilter.value === item.name ? null : { type: "cost_cat", value: item.name })}
+                      className={`flex items-center gap-3 cursor-pointer rounded-lg px-2 py-1 -mx-2 transition ${
+                        activeFilter?.type === "cost_cat" && activeFilter.value === item.name
+                          ? "bg-sky-950/50 ring-1 ring-sky-500/30"
+                          : activeFilter?.type === "cost_cat"
+                            ? "opacity-40 hover:opacity-70"
+                            : "hover:bg-slate-800/40"
+                      }`}
+                    >
+                      <div className="w-2 h-2 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
+                      <span className="text-xs text-slate-400 flex-1 truncate">{item.name}</span>
+                      <span className="text-xs font-mono font-semibold text-red-400">{fmt(item.value)}</span>
+                      <MiniBar value={item.value} max={data.bank.cost_breakdown[0]?.value || 1} color={COLORS[i % COLORS.length]} />
+                    </div>
+                  ))}
                 </div>
               </Card>
+              )}
             </div>
 
             {data.amex?.transactions?.length > 0 && (
@@ -491,7 +534,9 @@ function PublicDashboardContent() {
                       </tr>
                     </thead>
                     <tbody>
-                      {data.amex.transactions.map((tx: any, i: number) => (
+                      {data.amex.transactions
+                        .filter((tx: any) => !activeFilter || activeFilter.type !== "cost_cat" || tx.cost_category === activeFilter.value)
+                        .map((tx: any, i: number) => (
                         <tr key={i} className="border-b border-slate-800/20 hover:bg-slate-800/20">
                           <td className="p-3 font-mono text-slate-500 whitespace-nowrap">{tx.operation_date}</td>
                           <td className="p-3 text-slate-300 max-w-[250px] truncate">{tx.description}</td>
