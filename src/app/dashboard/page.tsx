@@ -184,6 +184,11 @@ function DashboardContent() {
     const ricaviRicariche = salesByType("RICARICHE");
     const ricaviLuggage = salesByType("LUGGAGE");
 
+    // Categorie vendita senza revenue_type assegnato — sommiamo come "Altre Vendite"
+    const ricaviNonClassificati = salesCats
+      .filter((c: any) => !c.revenue_type || c.revenue_type === "")
+      .reduce((s: number, c: any) => s + (c.net_sales || 0), 0);
+
     // Altre entrate bancarie non-INCASSO e non-COMMISSIONI (ecommerce, luggage app bonifici, etc.)
     const altreEntrateBanca = incomeBD
       .filter((c: any) => {
@@ -199,6 +204,7 @@ function DashboardContent() {
       { label: "Biglietteria", value: ricaviBiglietteria, icon: <Coins size={14} /> },
       { label: "Ricariche", value: ricaviRicariche, icon: <Coins size={14} /> },
       { label: "Luggage", value: ricaviLuggage, icon: <Package size={14} /> },
+      { label: "Altre Vendite", value: ricaviNonClassificati, icon: <Tag size={14} /> },
       { label: "Altre Entrate Bancarie", value: altreEntrateBanca, icon: <Landmark size={14} /> },
     ].filter(l => l.value > 0);
 
