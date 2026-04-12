@@ -696,8 +696,8 @@ function DashboardContent() {
           <>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               <KPI icon={<Users size={18} />} label="Personale" value={fmt(comp.total_costi_personale || 0)} sub={`${(inc.staff_on_sales || 0).toFixed(1)}% del fatturato`} color="text-amber-400" />
-              <KPI icon={<Landmark size={18} />} label="Uscite Banca + Amex" value={fmt((comp.total_spese_banca || 0) + (comp.total_spese_amex || 0))} change={ch.bank_out} color="text-red-400" />
-              <KPI icon={<Receipt size={18} />} label="Fatture Fornitori" value={fmt(data.invoices?.total || 0)} sub={`${data.invoices?.count || 0} fatture`} change={ch.invoices} color="text-orange-400" />
+              <KPI icon={<Landmark size={18} />} label="Costi operativi" value={fmt((comp.total_spese_banca || 0) + (comp.total_spese_amex || 0))} change={ch.bank_out} color="text-red-400" />
+              <KPI icon={<Receipt size={18} />} label="Costo merci" value={fmt(data.invoices?.total || 0)} sub={`${data.invoices?.count || 0} fatture`} change={ch.invoices} color="text-orange-400" />
               <KPI icon={<BarChart3 size={18} />} label="Costi Totali" value={fmt((comp.total_costi_personale || 0) + (comp.total_spese_banca || 0) + (comp.total_spese_amex || 0) + (data.invoices?.total || 0))} color="text-red-500" />
             </div>
 
@@ -756,6 +756,68 @@ function DashboardContent() {
                 </Card>
               )}
             </div>
+
+            {/* Bank transactions detail for selected cost category */}
+            {activeFilter?.type === "cost_cat" && (() => {
+              const filteredBankTx = (data.bank?.transactions || []).filter(
+                (tx: any) => tx.amount < 0 && tx.cost_category === activeFilter.value
+              );
+              const filteredAmexTx = (data.amex?.transactions || []).filter(
+                (tx: any) => tx.amount_eur > 0 && tx.cost_category === activeFilter.value
+              );
+              const allTx = [
+                ...filteredBankTx.map((tx: any) => ({
+                  date: tx.transaction_date,
+                  description: tx.counterpart || tx.description?.substring(0, 80) || "—",
+                  source: "Banca",
+                  amount: Math.abs(tx.amount),
+                })),
+                ...filteredAmexTx.map((tx: any) => ({
+                  date: tx.operation_date,
+                  description: tx.description || "—",
+                  source: "Amex",
+                  amount: Math.abs(tx.amount_eur),
+                })),
+              ].sort((a, b) => a.date?.localeCompare(b.date));
+              const totalFiltered = allTx.reduce((s, t) => s + t.amount, 0);
+
+              return allTx.length > 0 ? (
+                <Card className="overflow-hidden">
+                  <div className="px-5 py-3 border-b border-slate-800/60 flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-white">
+                      Movimenti — <span className="text-sky-400">{activeFilter.value}</span>
+                    </h3>
+                    <span className="text-xs text-slate-500 font-mono">{allTx.length} movimenti · {fmt(totalFiltered)}</span>
+                  </div>
+                  <div className="max-h-[400px] overflow-y-auto">
+                    <table className="w-full text-xs">
+                      <thead className="sticky top-0 bg-slate-900">
+                        <tr className="border-b border-slate-800 text-slate-500">
+                          <th className="text-left p-3 font-medium">Data</th>
+                          <th className="text-left p-3 font-medium">Descrizione</th>
+                          <th className="text-left p-3 font-medium">Fonte</th>
+                          <th className="text-right p-3 font-medium">Importo</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {allTx.map((tx, i) => (
+                          <tr key={i} className="border-b border-slate-800/20 hover:bg-slate-800/20 transition">
+                            <td className="p-3 font-mono text-slate-500 whitespace-nowrap">{tx.date}</td>
+                            <td className="p-3 text-slate-300 max-w-[300px] truncate">{tx.description}</td>
+                            <td className="p-3">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                                tx.source === "Banca" ? "bg-blue-950 text-blue-400" : "bg-purple-950 text-purple-400"
+                              }`}>{tx.source}</span>
+                            </td>
+                            <td className="p-3 text-right font-mono font-semibold text-red-400">-{fmt2(tx.amount)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              ) : null;
+            })()}
 
             {/* Invoice detail list */}
             {data.invoices?.data?.length > 0 && (
