@@ -565,12 +565,11 @@ function PublicDashboardContent() {
             {(() => {
               const cbTotal = (data.bank?.cost_breakdown || []).reduce((s: number, c: any) => s + (c.value || 0), 0);
               const invTotal = data.invoices?.total || 0;
-              const costiOp = cbTotal + invTotal;
-              const costiTotali = costiOp + (comp.total_costi_personale || 0);
+              const costiTotali = cbTotal + invTotal + (comp.total_costi_personale || 0);
               return (
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
               <KPI icon={<Users size={18} />} label="Personale" value={fmt(comp.total_costi_personale || 0)} sub={`${(inc.staff_on_sales || 0).toFixed(1)}% del fatturato`} color="text-amber-400" />
-              <KPI icon={<Landmark size={18} />} label="Costi operativi" value={fmt(costiOp)} change={ch.bank_out} color="text-red-400" />
+              <KPI icon={<Landmark size={18} />} label="Costi Operativi" value={fmt(cbTotal)} change={ch.bank_out} color="text-red-400" />
               <KPI icon={<BarChart3 size={18} />} label="Costi Totali" value={fmt(costiTotali)} color="text-red-500" />
             </div>
               );
@@ -579,7 +578,7 @@ function PublicDashboardContent() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {data.bank?.cost_breakdown?.length > 0 && (
               <Card className="p-5">
-                <h3 className="text-sm font-semibold text-white mb-4">Dettaglio Costi</h3>
+                <h3 className="text-sm font-semibold text-white mb-4">Dettaglio Costi Operativi</h3>
                 <div className="space-y-2.5">
                   {data.bank.cost_breakdown.slice(0, 12).map((item: any, i: number) => (
                     <div
