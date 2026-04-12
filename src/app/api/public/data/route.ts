@@ -125,15 +125,15 @@ export async function GET(request: NextRequest) {
   };
 
   // Cost breakdown by cost_category (bank + amex combined)
+  // Only count transactions WITH a cost_category — unclassified ones are excluded from costs
   const costBreakdown: Record<string, number> = {};
   for (const tx of bankOut) {
-    const key = tx.cost_category || "Non classificato";
-    costBreakdown[key] = (costBreakdown[key] || 0) + Math.abs(tx.amount);
+    if (!tx.cost_category) continue;
+    costBreakdown[tx.cost_category] = (costBreakdown[tx.cost_category] || 0) + Math.abs(tx.amount);
   }
   for (const tx of (amexTx || [])) {
-    if (tx.amount_eur > 0) {
-      const key = tx.cost_category || "Non classificato";
-      costBreakdown[key] = (costBreakdown[key] || 0) + Math.abs(tx.amount_eur);
+    if (tx.amount_eur > 0 && tx.cost_category) {
+      costBreakdown[tx.cost_category] = (costBreakdown[tx.cost_category] || 0) + Math.abs(tx.amount_eur);
     }
   }
 
