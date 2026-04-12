@@ -964,23 +964,132 @@ function DashboardContent() {
         {/* ══════════════════════════════════════════════════════
             TAB: FLUSSI FINANZIARI
         ══════════════════════════════════════════════════════ */}
-        {tab === "cashflow" && (
-          <>
-            {(() => {
-              const entrateCc = (data.bank?.income_breakdown || [])
-                .filter((b: any) => b.name === "CONTO CORRENTE")
-                .reduce((s: number, b: any) => s + (b.value || 0), 0);
-              return (
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                  <KPI icon={<ArrowDownToLine size={18} />} label="Entrate C/C" value={fmt(entrateCc)} color="text-emerald-400" />
-                  <KPI icon={<ArrowUpFromLine size={18} />} label="Uscite C/C" value={fmt(ba.total_out || 0)} change={ch.bank_out} color="text-red-400" />
-                  <KPI icon={<Landmark size={18} />} label="Saldo Iniziale" value={fmt(ba.opening_balance || 0)} color="text-slate-400" />
-                  <KPI icon={<Landmark size={18} />} label="Saldo Finale" value={fmt(ba.closing_balance || 0)} color="text-emerald-400" />
-                </div>
-              );
-            })()}
+        {tab === "cashflow" && (() => {
+          // ── Calcoli flussi ──
+          const totalEntrateBanca = (ba.total_in || 0);
+          const totalUsciteBanca = (ba.total_out || 0);
+          const totalUsciteAmex = (amex.total_charges || 0);
+          const totalUscite = totalUsciteBanca + totalUsciteAmex;
+          const saldoFlussi = totalEntrateBanca - totalUscite;
 
-            {/* Balance chart */}
+          const ibData: {name: string; value: number}[] = data.bank?.income_breakdown || [];
+          const cbData: {name: string; value: number}[] = data.bank?.cost_breakdown || [];
+          const axData: {name: string; value: number}[] = data.amex?.by_category || [];
+
+          const totalIb = ibData.reduce((s, b) => s + (b.value || 0), 0);
+          const totalCb = cbData.reduce((s, b) => s + (b.value || 0), 0);
+          const totalAx = axData.reduce((s, b) => s + (b.value || 0), 0);
+          const totalAllUscite = totalCb + totalAx;
+
+          return (
+          <>
+            {/* ── KPI Row ── */}
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+              <KPI icon={<ArrowDownToLine size={18} />} label="Entrate C/C" value={fmt(totalEntrateBanca)} color="text-emerald-400" />
+              <KPI icon={<ArrowUpFromLine size={18} />} label="Uscite C/C + Amex" value={fmt(totalUscite)} color="text-red-400" />
+              <KPI icon={<TrendingUp size={18} />} label="Saldo Flussi" value={fmt(saldoFlussi)} color={saldoFlussi >= 0 ? "text-emerald-400" : "text-red-400"} />
+              <KPI icon={<Landmark size={18} />} label="Saldo Iniziale" value={fmt(ba.opening_balance || 0)} color="text-slate-400" />
+              <KPI icon={<Landmark size={18} />} label="Saldo Finale" value={fmt(ba.closing_balance || 0)} color={((ba.closing_balance || 0) >= (ba.opening_balance || 0)) ? "text-emerald-400" : "text-red-400"} />
+            </div>
+
+            {/* ── Riepilogo Entrate / Uscite ── */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* Entrate breakdown con barre */}
+              <Card className="p-5">
+                <h3 className="text-sm font-semibold text-emerald-400 mb-3 flex items-center gap-1.5"><ArrowDownToLine size={14} /> Entrate per Causale</h3>
+                <div className="space-y-2.5">
+                  {ibData.filter((b: any) => b.value > 0).slice(0, 8).map((item: any, i: number) => {
+                    const pct = totalIb > 0 ? (item.value / totalIb) * 100 : 0;
+                    return (
+                      <div
+                        key={i}
+                        onClick={() => setActiveFilter(activeFilter?.type === "causale" && activeFilter.value === item.name ? null : { type: "causale", value: item.name })}
+                        className={`cursor-pointer rounded-lg px-2 py-1.5 -mx-2 transition ${
+                          activeFilter?.type === "causale" && activeFilter.value === item.name
+                            ? "bg-sky-950/50 ring-1 ring-sky-500/30"
+                            : activeFilter?.type === "causale" ? "opacity-40 hover:opacity-70" : "hover:bg-slate-800/40"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs text-slate-400 truncate flex-1">{item.name}</span>
+                          <span className="text-xs font-mono text-emerald-400 ml-2">{fmt(item.value)}</span>
+                          <span className="text-[10px] text-slate-600 ml-1.5 w-10 text-right">{pct.toFixed(0)}%</span>
+                        </div>
+                        <div className="h-1 rounded-full bg-slate-800 overflow-hidden">
+                          <div className="h-full bg-emerald-500/60 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div className="flex justify-between pt-2 border-t border-slate-800/60">
+                    <span className="text-xs font-semibold text-slate-300">Totale</span>
+                    <span className="text-xs font-mono font-semibold text-emerald-400">{fmt(totalIb)}</span>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Uscite Banca breakdown con barre */}
+              <Card className="p-5">
+                <h3 className="text-sm font-semibold text-red-400 mb-3 flex items-center gap-1.5"><ArrowUpFromLine size={14} /> Uscite Banca</h3>
+                <div className="space-y-2.5">
+                  {cbData.slice(0, 8).map((item: any, i: number) => {
+                    const pct = totalAllUscite > 0 ? (item.value / totalAllUscite) * 100 : 0;
+                    return (
+                      <div
+                        key={i}
+                        onClick={() => setActiveFilter(activeFilter?.type === "causale" && activeFilter.value === item.name ? null : { type: "causale", value: item.name })}
+                        className={`cursor-pointer rounded-lg px-2 py-1.5 -mx-2 transition ${
+                          activeFilter?.type === "causale" && activeFilter.value === item.name
+                            ? "bg-sky-950/50 ring-1 ring-sky-500/30"
+                            : activeFilter?.type === "causale" ? "opacity-40 hover:opacity-70" : "hover:bg-slate-800/40"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs text-slate-400 truncate flex-1">{item.name}</span>
+                          <span className="text-xs font-mono text-red-400 ml-2">{fmt(item.value)}</span>
+                          <span className="text-[10px] text-slate-600 ml-1.5 w-10 text-right">{pct.toFixed(0)}%</span>
+                        </div>
+                        <div className="h-1 rounded-full bg-slate-800 overflow-hidden">
+                          <div className="h-full bg-red-500/60 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div className="flex justify-between pt-2 border-t border-slate-800/60">
+                    <span className="text-xs font-semibold text-slate-300">Totale Banca</span>
+                    <span className="text-xs font-mono font-semibold text-red-400">{fmt(totalCb)}</span>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Uscite Amex breakdown */}
+              <Card className="p-5">
+                <h3 className="text-sm font-semibold text-purple-400 mb-3 flex items-center gap-1.5"><CreditCard size={14} /> Uscite Amex</h3>
+                <div className="space-y-2.5">
+                  {axData.slice(0, 8).map((item: any, i: number) => {
+                    const pct = totalAllUscite > 0 ? (item.value / totalAllUscite) * 100 : 0;
+                    return (
+                      <div key={i} className="rounded-lg px-2 py-1.5 -mx-2 hover:bg-slate-800/40 transition">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs text-slate-400 truncate flex-1">{item.name}</span>
+                          <span className="text-xs font-mono text-purple-400 ml-2">{fmt(item.value)}</span>
+                          <span className="text-[10px] text-slate-600 ml-1.5 w-10 text-right">{pct.toFixed(0)}%</span>
+                        </div>
+                        <div className="h-1 rounded-full bg-slate-800 overflow-hidden">
+                          <div className="h-full bg-purple-500/60 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div className="flex justify-between pt-2 border-t border-slate-800/60">
+                    <span className="text-xs font-semibold text-slate-300">Totale Amex</span>
+                    <span className="text-xs font-mono font-semibold text-purple-400">{fmt(totalAx)}</span>
+                  </div>
+                </div>
+              </Card>
+            </div>
+
+            {/* ── Andamento Saldo Giornaliero ── */}
             {data.bank?.daily_balance?.length > 0 && (
               <Card className="p-5">
                 <h3 className="text-sm font-semibold text-white mb-4">Andamento Saldo Giornaliero</h3>
@@ -1005,65 +1114,39 @@ function DashboardContent() {
               </Card>
             )}
 
-            {/* Waterfall chart */}
+            {/* ── Waterfall Flussi di Cassa ── */}
             {(() => {
               const opening = ba.opening_balance || 0;
               const closing = ba.closing_balance || 0;
-              const totalIn = ba.total_in || 0;
-              const totalOut = ba.total_out || 0;
-
-              // Build helper to sum income_breakdown by pattern
-              const ibData = data.bank?.income_breakdown || [];
-              const ibVal = (...patterns: string[]) =>
-                ibData.filter((c: any) => patterns.some((p: string) => (c.name || "").toUpperCase().includes(p.toUpperCase())))
-                  .reduce((s: number, c: any) => s + (c.value || 0), 0);
-
-              const cbData = data.bank?.cost_breakdown || [];
-              const cbVal = (...patterns: string[]) =>
-                cbData.filter((c: any) => patterns.some((p: string) => (c.name || "").toUpperCase().includes(p.toUpperCase())))
-                  .reduce((s: number, c: any) => s + (c.value || 0), 0);
-
-              const incassi = ibVal("INCASSO");
-              const commEntrata = ibVal("COMMISSIONI");
-              const contoCorrente = ibVal("CONTO CORRENTE");
-              const altreEntrate = Math.max(totalIn - incassi - commEntrata - contoCorrente, 0);
-              const stipendi = cbVal("STIPENDI");
-              const fornitori = cbVal("ACQUISTO MERCE", "MERCE") + (data.invoices?.total || 0);
-              const nexi = cbVal("COMMISSIONI NEXI", "COMMISSIONI POS", "NEXI");
-              const altreUscite = Math.max(totalOut - stipendi - fornitori - nexi, 0);
 
               const steps: { name: string; base: number; up: number; down: number; total: number }[] = [];
               let r = opening;
 
               steps.push({ name: "Saldo Iniz.", base: 0, up: opening, down: 0, total: opening });
 
-              const entrate = [
-                { name: "Incassi", value: incassi },
-                { name: "Comm.", value: commEntrata },
-                { name: "C/C", value: contoCorrente },
-                { name: "Altro +", value: altreEntrate },
-              ];
-              entrate.forEach(e => {
-                if (e.value > 0) {
-                  steps.push({ name: e.name, base: r, up: e.value, down: 0, total: r + e.value });
-                  r += e.value;
+              // Entrate: ogni categoria income_breakdown positiva
+              for (const item of ibData) {
+                if (item.value > 0) {
+                  steps.push({ name: item.name, base: r, up: item.value, down: 0, total: r + item.value });
+                  r += item.value;
                 }
-              });
+              }
 
-              const uscite = [
-                { name: "Stipendi", value: stipendi },
-                { name: "Fornitori", value: fornitori },
-                { name: "NEXI", value: nexi },
-                { name: "Altro -", value: altreUscite },
-              ];
-              uscite.forEach(u => {
-                if (u.value > 0) {
-                  steps.push({ name: u.name, base: r - u.value, up: 0, down: u.value, total: r - u.value });
-                  r -= u.value;
+              // Uscite banca: ogni categoria cost_breakdown
+              for (const item of cbData) {
+                if (item.value > 0) {
+                  steps.push({ name: item.name, base: r - item.value, up: 0, down: item.value, total: r - item.value });
+                  r -= item.value;
                 }
-              });
+              }
 
-              steps.push({ name: "Saldo Fin.", base: 0, up: closing, down: 0, total: closing });
+              // Uscite Amex aggregate
+              if (totalUsciteAmex > 0) {
+                steps.push({ name: "Amex", base: r - totalUsciteAmex, up: 0, down: totalUsciteAmex, total: r - totalUsciteAmex });
+                r -= totalUsciteAmex;
+              }
+
+              steps.push({ name: "Saldo Fin.", base: 0, up: Math.max(closing, 0), down: closing < 0 ? Math.abs(closing) : 0, total: closing });
 
               return (
                 <Card className="p-5">
@@ -1071,7 +1154,7 @@ function DashboardContent() {
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={steps} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                      <XAxis dataKey="name" tick={{ fill: "#94a3b8", fontSize: 9 }} />
+                      <XAxis dataKey="name" tick={{ fill: "#94a3b8", fontSize: 9 }} interval={0} angle={-30} textAnchor="end" height={50} />
                       <YAxis tick={{ fill: "#64748b", fontSize: 10 }} tickFormatter={v => fmtAxis(v)} />
                       <Tooltip
                         content={({ active, payload }: any) => {
@@ -1096,59 +1179,7 @@ function DashboardContent() {
               );
             })()}
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {/* Income breakdown */}
-              {data.bank?.income_breakdown?.length > 0 && (
-                <Card className="p-5">
-                  <h3 className="text-sm font-semibold text-emerald-400 mb-3 flex items-center gap-1.5"><ArrowDownToLine size={14} /> Entrate per Causale</h3>
-                  <div className="space-y-2">
-                    {data.bank.income_breakdown.slice(0, 10).map((item: any, i: number) => (
-                      <div
-                        key={i}
-                        onClick={() => setActiveFilter(activeFilter?.type === "causale" && activeFilter.value === item.name ? null : { type: "causale", value: item.name })}
-                        className={`flex items-center justify-between cursor-pointer rounded-lg px-2 py-1 -mx-2 transition ${
-                          activeFilter?.type === "causale" && activeFilter.value === item.name
-                            ? "bg-sky-950/50 ring-1 ring-sky-500/30"
-                            : activeFilter?.type === "causale"
-                              ? "opacity-40 hover:opacity-70"
-                              : "hover:bg-slate-800/40"
-                        }`}
-                      >
-                        <span className="text-xs text-slate-400 truncate flex-1">{item.name}</span>
-                        <span className="text-xs font-mono text-emerald-400 ml-3">{fmt(item.value)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              )}
-
-              {/* Cost breakdown */}
-              {data.bank?.cost_breakdown?.length > 0 && (
-                <Card className="p-5">
-                  <h3 className="text-sm font-semibold text-red-400 mb-3 flex items-center gap-1.5"><ArrowUpFromLine size={14} /> Uscite per Causale</h3>
-                  <div className="space-y-2">
-                    {data.bank.cost_breakdown.slice(0, 10).map((item: any, i: number) => (
-                      <div
-                        key={i}
-                        onClick={() => setActiveFilter(activeFilter?.type === "causale" && activeFilter.value === item.name ? null : { type: "causale", value: item.name })}
-                        className={`flex items-center justify-between cursor-pointer rounded-lg px-2 py-1 -mx-2 transition ${
-                          activeFilter?.type === "causale" && activeFilter.value === item.name
-                            ? "bg-sky-950/50 ring-1 ring-sky-500/30"
-                            : activeFilter?.type === "causale"
-                              ? "opacity-40 hover:opacity-70"
-                              : "hover:bg-slate-800/40"
-                        }`}
-                      >
-                        <span className="text-xs text-slate-400 truncate flex-1">{item.name}</span>
-                        <span className="text-xs font-mono text-red-400 ml-3">{fmt(item.value)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              )}
-            </div>
-
-            {/* Full transaction list */}
+            {/* ── Tabella Movimenti ── */}
             <Card className="overflow-hidden">
               <div className="px-5 py-3 border-b border-slate-800/60 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-white">Movimenti C/C</h3>
@@ -1170,7 +1201,7 @@ function DashboardContent() {
                     {(data.bank?.transactions || [])
                       .filter((tx: any) => !activeFilter || activeFilter.type !== "causale" || tx.cost_category === activeFilter.value || tx.income_category === activeFilter.value || tx.subcategory === activeFilter.value || tx.category === activeFilter.value)
                       .map((tx: any, i: number) => (
-                      <tr key={i} className="border-b border-slate-800/20 hover:bg-slate-800/20 transition">
+                      <tr key={i} className={`border-b border-slate-800/20 hover:bg-slate-800/20 transition ${tx.amount > 0 ? "bg-emerald-950/10" : "bg-red-950/10"}`}>
                         <td className="p-3 font-mono text-slate-500 whitespace-nowrap">{tx.transaction_date}</td>
                         <td className="p-3 text-slate-300 max-w-[250px] truncate">{tx.counterpart || tx.description?.substring(0, 80)}</td>
                         <td className="p-3">
@@ -1216,7 +1247,8 @@ function DashboardContent() {
               </div>
             </Card>
           </>
-        )}
+          );
+        })()}
 
         {/* ══════════════════════════════════════════════════════
             TAB: CONTO ECONOMICO (P&L)
