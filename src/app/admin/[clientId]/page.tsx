@@ -95,6 +95,15 @@ export default function ClientManagePage() {
   const [sortCol, setSortCol] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
+  // History sort state
+  const [hSortCol, setHSortCol] = useState<string | null>(null);
+  const [hSortDir, setHSortDir] = useState<"asc" | "desc">("asc");
+
+  // Multi-select state (preview)
+  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
+  // Multi-select state (history)
+  const [selectedHistoryRows, setSelectedHistoryRows] = useState<Set<number>>(new Set());
+
   useEffect(() => {
     loadClientInfo();
     loadBatches();
@@ -328,6 +337,141 @@ export default function ClientManagePage() {
     });
   }
 
+  // Toggle row selection (preview)
+  function toggleRowSelect(idx: number) {
+    setSelectedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx); else next.add(idx);
+      return next;
+    });
+  }
+  function toggleAllRows() {
+    if (selectedRows.size === editedRows.length) {
+      setSelectedRows(new Set());
+    } else {
+      setSelectedRows(new Set(editedRows.map((_, i) => i)));
+    }
+  }
+  function deleteSelectedRows() {
+    if (selectedRows.size === 0) return;
+    setEditedRows((prev) => prev.filter((_, i) => !selectedRows.has(i)));
+    setSelectedRows(new Set());
+  }
+
+  // History sort
+  function toggleHistorySort(colKey: string) {
+    if (hSortCol === colKey) {
+      setHSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setHSortCol(colKey);
+      setHSortDir("asc");
+    }
+  }
+  const historySortedIndexes: number[] = historyRows.map((_, i) => i);
+  if (hSortCol) {
+    historySortedIndexes.sort((a, b) => {
+      const va = historyRows[a]?.[hSortCol!] ?? "";
+      const vb = historyRows[b]?.[hSortCol!] ?? "";
+      const na = typeof va === "number" ? va : parseFloat(va);
+      const nb = typeof vb === "number" ? vb : parseFloat(vb);
+      if (!isNaN(na) && !isNaN(nb)) return hSortDir === "asc" ? na - nb : nb - na;
+      const sa = String(va).toLowerCase();
+      const sb2 = String(vb).toLowerCase();
+      return hSortDir === "asc" ? sa.localeCompare(sb2) : sb2.localeCompare(sa);
+    });
+  }
+
+  // Toggle row selection (history)
+  function toggleHistoryRowSelect(idx: number) {
+    setSelectedHistoryRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx); else next.add(idx);
+      return next;
+    });
+  }
+  function toggleAllHistoryRows() {
+    if (selectedHistoryRows.size === historyRows.length) {
+      setSelectedHistoryRows(new Set());
+    } else {
+      setSelectedHistoryRows(new Set(historyRows.map((_, i) => i)));
+    }
+  }
+  function deleteSelectedHistoryRows() {
+    if (selectedHistoryRows.size === 0) return;
+    setHistoryRows((prev) => prev.filter((_, i) => !selectedHistoryRows.has(i)));
+    setSelectedHistoryRows(new Set());
+  }
+
+  // Helper: render an editable cell (shared between preview and history tables)
+  function renderEditCell(
+    row: Record<string, any>,
+    col: ColumnDef,
+    rowIdx: number,
+    onUpdate: (idx: number, key: string, val: string) => void,
+    fileType: string
+  ) {
+    const isBankRow = fileType === "bank_movements";
+    const amt = row?.amount ?? 0;
+    const isDateCol = col.key === "transaction_date" || col.key === "operation_date" || col.key === "booking_date" || col.key === "hire_date";
+
+    if (col.type === "select") {
+      return (
+        <select
+          value={row[col.key] ?? ""}
+          onChange={(e) => onUpdate(rowIdx, col.key, e.target.value)}
+          className="w-full bg-slate-800 border border-slate-700 hover:border-slate-600 focus:border-sky-500 rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500/50 transition-colors"
+        >
+          <option value="">— Seleziona —</option>
+          {(col.key === "income_category"
+            ? ["INCASSO", "COMMISSIONI", "CONTO CORRENTE"]
+            : bankCategories
+          ).map((cat) => (
+            <option key={cat} value={cat}>{cat}</option>
+          ))}
+        </select>
+      );
+    }
+
+    if (isDateCol) {
+      return (
+        <input
+          type="date"
+          value={row[col.key] ?? ""}
+          onChange={(e) => onUpdate(rowIdx, col.key, e.target.value)}
+          className="w-full bg-transparent border border-transparent hover:border-slate-700 focus:border-sky-500 rounded px-2 py-1 text-sm text-white font-mono focus:outline-none focus:ring-1 focus:ring-sky-500/50 transition-colors [color-scheme:dark]"
+        />
+      );
+    }
+
+    if (col.type === "currency" || col.type === "number" || col.type === "percent") {
+      return (
+        <input
+          type="number"
+          inputMode="decimal"
+          step={col.type === "currency" || col.type === "percent" ? "0.01" : "1"}
+          placeholder={col.type === "currency" ? "0.00" : "0"}
+          value={row[col.key] ?? ""}
+          onChange={(e) => onUpdate(rowIdx, col.key, e.target.value)}
+          className={`w-full bg-transparent border border-transparent hover:border-slate-700 focus:border-sky-500 rounded px-2 py-1 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-sky-500/50 transition-colors ${
+            isBankRow && col.key === "amount"
+              ? amt > 0 ? "text-emerald-400" : amt < 0 ? "text-red-400" : "text-white"
+              : "text-white"
+          }`}
+        />
+      );
+    }
+
+    // text
+    return (
+      <input
+        type="text"
+        value={row[col.key] ?? ""}
+        onChange={(e) => onUpdate(rowIdx, col.key, e.target.value)}
+        className="w-full bg-transparent border border-transparent hover:border-slate-700 focus:border-sky-500 rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500/50 transition-colors"
+      />
+    );
+  }
+
   /* --- Invoice Manual Entry --- */
 
   function startInvoiceMode() {
@@ -491,6 +635,9 @@ export default function ClientManagePage() {
     setHistoryRows([]);
     setHistoryColumns([]);
     setHistoryFileType("");
+    setHSortCol(null);
+    setHSortDir("asc");
+    setSelectedHistoryRows(new Set());
   }
 
   function updateHistoryCell(rowIdx: number, key: string, value: string) {
@@ -840,8 +987,16 @@ export default function ClientManagePage() {
                     </p>
                   </div>
                   <div className="flex gap-2">
+                    {selectedRows.size > 0 && (
+                      <button
+                        onClick={deleteSelectedRows}
+                        className="px-4 py-2 text-sm font-medium text-red-400 hover:text-red-300 bg-red-950/40 hover:bg-red-950/60 border border-red-800/50 rounded-lg transition-colors flex items-center gap-1.5"
+                      >
+                        🗑 Elimina {selectedRows.size} righe
+                      </button>
+                    )}
                     <button
-                      onClick={() => { setPreview(null); setEditedRows([]); }}
+                      onClick={() => { setPreview(null); setEditedRows([]); setSelectedRows(new Set()); }}
                       className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-white bg-slate-800 rounded-lg transition-colors"
                     >
                       ✕ Annulla
@@ -869,6 +1024,14 @@ export default function ClientManagePage() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-slate-800/80">
+                          <th className="px-2 py-2.5 w-8">
+                            <input
+                              type="checkbox"
+                              checked={selectedRows.size === editedRows.length && editedRows.length > 0}
+                              onChange={toggleAllRows}
+                              className="accent-sky-500 w-3.5 h-3.5 cursor-pointer"
+                            />
+                          </th>
                           {preview.columns.map((col) => (
                             <th
                               key={col.key}
@@ -894,47 +1057,30 @@ export default function ClientManagePage() {
                                 ? "bg-red-950/20 hover:bg-red-950/40"
                                 : "hover:bg-slate-800/30"
                             : "hover:bg-slate-800/30";
+                          const isSelected = selectedRows.has(rowIdx);
                           return (
-                          <tr key={rowIdx} className={`${rowColor} transition-colors`}>
+                          <tr key={rowIdx} className={`${rowColor} ${isSelected ? "ring-1 ring-inset ring-sky-500/40" : ""} transition-colors`}>
+                            <td className="px-2 py-1.5">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleRowSelect(rowIdx)}
+                                className="accent-sky-500 w-3.5 h-3.5 cursor-pointer"
+                              />
+                            </td>
                             {preview.columns.map((col) => (
                               <td key={col.key} className="px-3 py-1.5">
-                                {col.editable ? (
-                                  col.type === "select" ? (
-                                    <select
-                                      value={row[col.key] ?? ""}
-                                      onChange={(e) => updateCell(rowIdx, col.key, e.target.value)}
-                                      className="w-full bg-slate-800 border border-slate-700 hover:border-slate-600 focus:border-sky-500 rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500/50 transition-colors"
-                                    >
-                                      <option value="">— Seleziona —</option>
-                                      {(col.key === "income_category"
-                                        ? ["INCASSO", "COMMISSIONI", "CONTO CORRENTE"]
-                                        : bankCategories
-                                      ).map((cat) => (
-                                        <option key={cat} value={cat}>{cat}</option>
-                                      ))}
-                                    </select>
-                                  ) : (
-                                    <input
-                                      type={col.type === "text" ? "text" : "number"}
-                                      step={col.type === "currency" || col.type === "percent" ? "0.01" : "1"}
-                                      value={row[col.key] ?? ""}
-                                      onChange={(e) => updateCell(rowIdx, col.key, e.target.value)}
-                                      className={`w-full bg-transparent border border-transparent hover:border-slate-700 focus:border-sky-500 rounded px-2 py-1 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-sky-500/50 transition-colors ${
-                                        isBankRow && col.key === "amount"
-                                          ? amt > 0 ? "text-emerald-400" : amt < 0 ? "text-red-400" : "text-white"
-                                          : "text-white"
-                                      }`}
-                                    />
-                                  )
-                                ) : (
-                                  <span className={`px-2 py-1 font-mono text-sm ${
-                                    isBankRow && col.key === "amount"
-                                      ? amt > 0 ? "text-emerald-400" : amt < 0 ? "text-red-400" : "text-slate-400"
-                                      : "text-slate-400"
-                                  }`}>
-                                    {row[col.key]}
-                                  </span>
-                                )}
+                                {col.editable
+                                  ? renderEditCell(row, col, rowIdx, updateCell, preview.file_type)
+                                  : (
+                                    <span className={`px-2 py-1 font-mono text-sm ${
+                                      isBankRow && col.key === "amount"
+                                        ? amt > 0 ? "text-emerald-400" : amt < 0 ? "text-red-400" : "text-slate-400"
+                                        : "text-slate-400"
+                                    }`}>
+                                      {row[col.key]}
+                                    </span>
+                                  )}
                               </td>
                             ))}
                             <td className="px-2 py-1.5">
@@ -1079,6 +1225,14 @@ export default function ClientManagePage() {
                                 {historyRows.length} righe · Modifica le celle e salva
                               </p>
                               <div className="flex items-center gap-2">
+                                {selectedHistoryRows.size > 0 && (
+                                  <button
+                                    onClick={deleteSelectedHistoryRows}
+                                    className="px-3 py-1.5 text-xs font-medium text-red-400 hover:text-red-300 bg-red-950/40 hover:bg-red-950/60 border border-red-800/50 rounded-lg transition-colors flex items-center gap-1"
+                                  >
+                                    🗑 Elimina {selectedHistoryRows.size}
+                                  </button>
+                                )}
                                 <button
                                   onClick={closeHistoryEdit}
                                   className="px-3 py-1.5 text-xs text-slate-400 hover:text-white bg-slate-800 rounded-lg transition-colors"
@@ -1107,48 +1261,63 @@ export default function ClientManagePage() {
                               <table className="w-full text-sm">
                                 <thead>
                                   <tr className="bg-slate-800/40">
+                                    <th className="px-2 py-2 w-8">
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedHistoryRows.size === historyRows.length && historyRows.length > 0}
+                                        onChange={toggleAllHistoryRows}
+                                        className="accent-sky-500 w-3.5 h-3.5 cursor-pointer"
+                                      />
+                                    </th>
                                     {historyColumns.map((col) => (
-                                      <th key={col.key} className="px-3 py-2 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">
+                                      <th
+                                        key={col.key}
+                                        onClick={() => toggleHistorySort(col.key)}
+                                        className="px-3 py-2 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:text-white select-none transition-colors"
+                                      >
                                         {col.label}
+                                        {hSortCol === col.key ? (hSortDir === "asc" ? " ▲" : " ▼") : ""}
                                       </th>
                                     ))}
                                     <th className="px-3 py-2 w-10" />
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-800/50">
-                                  {historyRows.map((row, rowIdx) => (
-                                    <tr key={rowIdx} className="hover:bg-slate-800/30 transition-colors">
+                                  {historySortedIndexes.map((rowIdx) => {
+                                    const row = historyRows[rowIdx];
+                                    const isBankRow = historyFileType === "bank_movements";
+                                    const amt = row?.amount ?? 0;
+                                    const rowColor = isBankRow
+                                      ? amt > 0
+                                        ? "bg-emerald-950/20 hover:bg-emerald-950/40"
+                                        : amt < 0
+                                          ? "bg-red-950/20 hover:bg-red-950/40"
+                                          : "hover:bg-slate-800/30"
+                                      : "hover:bg-slate-800/30";
+                                    const isSelected = selectedHistoryRows.has(rowIdx);
+                                    return (
+                                    <tr key={rowIdx} className={`${rowColor} ${isSelected ? "ring-1 ring-inset ring-sky-500/40" : ""} transition-colors`}>
+                                      <td className="px-2 py-1.5">
+                                        <input
+                                          type="checkbox"
+                                          checked={isSelected}
+                                          onChange={() => toggleHistoryRowSelect(rowIdx)}
+                                          className="accent-sky-500 w-3.5 h-3.5 cursor-pointer"
+                                        />
+                                      </td>
                                       {historyColumns.map((col) => (
                                         <td key={col.key} className="px-3 py-1.5">
-                                          {col.editable ? (
-                                            col.type === "select" ? (
-                                              <select
-                                                value={row[col.key] ?? ""}
-                                                onChange={(e) => updateHistoryCell(rowIdx, col.key, e.target.value)}
-                                                className="w-full bg-slate-800 border border-slate-700 hover:border-slate-600 focus:border-sky-500 rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500/50 transition-colors"
-                                              >
-                                                <option value="">— Seleziona —</option>
-                                                {(col.key === "income_category"
-                                                  ? ["INCASSO", "COMMISSIONI", "CONTO CORRENTE"]
-                                                  : bankCategories
-                                                ).map((cat) => (
-                                                  <option key={cat} value={cat}>{cat}</option>
-                                                ))}
-                                              </select>
-                                            ) : (
-                                              <input
-                                                type={col.type === "text" ? "text" : "number"}
-                                                step={col.type === "currency" || col.type === "percent" ? "0.01" : "1"}
-                                                value={row[col.key] ?? ""}
-                                                onChange={(e) => updateHistoryCell(rowIdx, col.key, e.target.value)}
-                                                className="w-full bg-transparent border border-transparent hover:border-slate-700 focus:border-sky-500 rounded px-2 py-1 text-sm text-white font-mono focus:outline-none focus:ring-1 focus:ring-sky-500/50 transition-colors"
-                                              />
-                                            )
-                                          ) : (
-                                            <span className="px-2 py-1 text-slate-400 font-mono text-sm">
-                                              {row[col.key]}
-                                            </span>
-                                          )}
+                                          {col.editable
+                                            ? renderEditCell(row, col, rowIdx, updateHistoryCell, historyFileType)
+                                            : (
+                                              <span className={`px-2 py-1 font-mono text-sm ${
+                                                isBankRow && col.key === "amount"
+                                                  ? amt > 0 ? "text-emerald-400" : amt < 0 ? "text-red-400" : "text-slate-400"
+                                                  : "text-slate-400"
+                                              }`}>
+                                                {row[col.key]}
+                                              </span>
+                                            )}
                                         </td>
                                       ))}
                                       <td className="px-2 py-1.5">
@@ -1161,7 +1330,8 @@ export default function ClientManagePage() {
                                         </button>
                                       </td>
                                     </tr>
-                                  ))}
+                                    );
+                                  })}
                                 </tbody>
                               </table>
                             </div>
@@ -1183,8 +1353,8 @@ export default function ClientManagePage() {
                                   </>
                                 ) : historyFileType === "bank_movements" ? (
                                   <>
-                                    <span>Entrate: €{historyRows.filter(r => r.amount > 0).reduce((s, r) => s + r.amount, 0).toFixed(2)}</span>
-                                    <span>Uscite: €{historyRows.filter(r => r.amount < 0).reduce((s, r) => s + Math.abs(r.amount), 0).toFixed(2)}</span>
+                                    <span className="text-emerald-500">Entrate: €{historyRows.filter(r => r.amount > 0).reduce((s, r) => s + r.amount, 0).toFixed(2)}</span>
+                                    <span className="text-red-500">Uscite: €{historyRows.filter(r => r.amount < 0).reduce((s, r) => s + Math.abs(r.amount), 0).toFixed(2)}</span>
                                     <span>Saldo: €{historyRows.reduce((s, r) => s + (r.amount || 0), 0).toFixed(2)}</span>
                                   </>
                                 ) : historyFileType === "amex_statement" ? (
