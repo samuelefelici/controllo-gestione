@@ -435,13 +435,16 @@ function DashboardContent() {
             <Card className="p-5">
               <h3 className="text-sm font-semibold text-white mb-4">Composizione Costi del Mese</h3>
               <div className="space-y-3">
-                {[
-                  { label: "Personale (lordo + TFR)", value: comp.total_costi_personale, color: "#f59e0b", icon: <Users size={16} /> },
-                  { label: "Uscite C/C Bancario", value: comp.total_spese_banca, color: "#ef4444", icon: <Landmark size={16} /> },
-                  { label: "Addebiti Amex", value: comp.total_spese_amex, color: "#8b5cf6", icon: <CreditCard size={16} /> },
-                  { label: "Fatture Fornitori", value: data.invoices?.total || 0, color: "#f97316", icon: <Receipt size={16} /> },
-                ].map((item, i) => {
-                  const total = (comp.total_costi_personale || 0) + (comp.total_spese_banca || 0) + (comp.total_spese_amex || 0) + (data.invoices?.total || 0);
+                {(() => {
+                  const cbTotal = (data.cost_breakdown || []).reduce((s: number, c: { value: number }) => s + c.value, 0);
+                  const invTotal = data.invoices?.total || 0;
+                  const items = [
+                    { label: "Personale (lordo + TFR)", value: comp.total_costi_personale, color: "#f59e0b", icon: <Users size={16} /> },
+                    { label: "Costi Operativi", value: cbTotal, color: "#ef4444", icon: <Landmark size={16} /> },
+                    { label: "Fatture Fornitori", value: invTotal, color: "#f97316", icon: <Receipt size={16} /> },
+                  ];
+                  const total = (comp.total_costi_personale || 0) + cbTotal + invTotal;
+                  return items.map((item, i) => {
                   const pct = total > 0 ? ((item.value || 0) / total * 100) : 0;
                   return (
                     <div key={i} className="flex items-center gap-4">
@@ -458,7 +461,8 @@ function DashboardContent() {
                       <span className="text-xs font-mono text-slate-500 w-12 text-right">{pct.toFixed(0)}%</span>
                     </div>
                   );
-                })}
+                });
+                })()}
               </div>
             </Card>
           </>
@@ -607,12 +611,21 @@ function DashboardContent() {
         ══════════════════════════════════════════════════════ */}
         {tab === "costs" && (
           <>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <KPI icon={<Users size={18} />} label="Personale" value={fmt(comp.total_costi_personale || 0)} sub={`${(inc.staff_on_sales || 0).toFixed(1)}% del fatturato`} color="text-amber-400" />
-              <KPI icon={<Landmark size={18} />} label="Costi operativi" value={fmt((comp.total_spese_banca || 0) + (comp.total_spese_amex || 0))} change={ch.bank_out} color="text-red-400" />
-              <KPI icon={<Receipt size={18} />} label="Costo merci" value={fmt(data.invoices?.total || 0)} sub={`${data.invoices?.count || 0} fatture`} change={ch.invoices} color="text-orange-400" />
-              <KPI icon={<BarChart3 size={18} />} label="Costi Totali" value={fmt((comp.total_costi_personale || 0) + (comp.total_spese_banca || 0) + (comp.total_spese_amex || 0) + (data.invoices?.total || 0))} color="text-red-500" />
-            </div>
+            {(() => {
+              // Calcola totale costi operativi coerente col P&L: cost_breakdown + fatture
+              const cbTotal = (data.bank?.cost_breakdown || []).reduce((s: number, c: any) => s + (c.value || 0), 0);
+              const invTotal = data.invoices?.total || 0;
+              const costiOp = cbTotal + invTotal;
+              const costiTotali = costiOp + (comp.total_costi_personale || 0);
+              return (
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <KPI icon={<Users size={18} />} label="Personale" value={fmt(comp.total_costi_personale || 0)} sub={`${(inc.staff_on_sales || 0).toFixed(1)}% del fatturato`} color="text-amber-400" />
+                  <KPI icon={<Landmark size={18} />} label="Costi operativi" value={fmt(costiOp)} color="text-red-400" />
+                  <KPI icon={<Receipt size={18} />} label="di cui Fatture" value={fmt(invTotal)} sub={`${data.invoices?.count || 0} fatture`} change={ch.invoices} color="text-orange-400" />
+                  <KPI icon={<BarChart3 size={18} />} label="Costi Totali" value={fmt(costiTotali)} color="text-red-500" />
+                </div>
+              );
+            })()}
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Cost breakdown by category */}
