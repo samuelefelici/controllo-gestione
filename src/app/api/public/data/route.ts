@@ -138,17 +138,18 @@ export async function GET(request: NextRequest) {
   }
 
   // Bank income breakdown
+  // 1. All transactions with income_category set (positive OR negative) — explicit user assignments
+  // 2. Positive transactions without income_category — use auto-mapping or subcategory
   const CONTO_CORRENTE_PATTERNS = ["BONIFICO A VOSTRO FAVORE", "BONIFICO DALL'ESTERO", "VERSAMENTO CONTANTE SELF"];
   const bankIncomeBreakdown: Record<string, number> = {};
-  for (const tx of bankIn) {
-    let key: string;
+  for (const tx of (bankTx || [])) {
     if (tx.income_category) {
-      key = tx.income_category;
-    } else {
+      bankIncomeBreakdown[tx.income_category] = (bankIncomeBreakdown[tx.income_category] || 0) + tx.amount;
+    } else if (tx.amount > 0) {
       const raw = tx.subcategory || tx.category || "Altro";
-      key = CONTO_CORRENTE_PATTERNS.some(p => raw.toUpperCase().includes(p.toUpperCase())) ? "CONTO CORRENTE" : raw;
+      const key = CONTO_CORRENTE_PATTERNS.some((p: string) => raw.toUpperCase().includes(p.toUpperCase())) ? "CONTO CORRENTE" : raw;
+      bankIncomeBreakdown[key] = (bankIncomeBreakdown[key] || 0) + tx.amount;
     }
-    bankIncomeBreakdown[key] = (bankIncomeBreakdown[key] || 0) + tx.amount;
   }
 
   // Daily bank balance
