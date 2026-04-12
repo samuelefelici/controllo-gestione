@@ -91,6 +91,10 @@ export default function ClientManagePage() {
   const [salesAssigning, setSalesAssigning] = useState(false);
   const [salesPeriod, setSalesPeriod] = useState(period);
 
+  // Preview sort state
+  const [sortCol, setSortCol] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
   useEffect(() => {
     loadClientInfo();
     loadBatches();
@@ -231,7 +235,31 @@ export default function ClientManagePage() {
           totals: data.totals,
         };
         setPreview(previewData);
-        setEditedRows(JSON.parse(JSON.stringify(data.rows)));
+        let rows = JSON.parse(JSON.stringify(data.rows));
+
+        // Auto-categorize bank movements based on existing DB mappings
+        if (data.file_type === "bank_movements") {
+          try {
+            const mapRes = await fetch(`/api/bank-mappings?client_id=${clientId}`);
+            const mapData = await mapRes.json();
+            if (mapData.success) {
+              const cm = mapData.cost_mappings || {};
+              const im = mapData.income_mappings || {};
+              rows = rows.map((row: any) => {
+                const key = (row.counterpart || row.description || "").trim().toUpperCase();
+                if (key) {
+                  if (!row.cost_category && cm[key]) row.cost_category = cm[key];
+                  if (!row.income_category && im[key]) row.income_category = im[key];
+                }
+                return row;
+              });
+            }
+          } catch (_) { /* ignore mapping errors */ }
+        }
+
+        setEditedRows(rows);
+        setSortCol(null);
+        setSortDir("asc");
         if (data.period) setPeriod(data.period);
       } else {
         alert("Errore: " + (data.error || data.details || "Parsing fallito"));
@@ -272,6 +300,32 @@ export default function ClientManagePage() {
     });
     newRow.rank = editedRows.length + 1;
     setEditedRows((prev) => [...prev, newRow]);
+  }
+
+  function toggleSort(colKey: string) {
+    if (sortCol === colKey) {
+      setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortCol(colKey);
+      setSortDir("asc");
+    }
+  }
+
+  // Compute sorted indexes so edits still target the original array
+  const sortedIndexes: number[] = editedRows.map((_, i) => i);
+  if (sortCol) {
+    sortedIndexes.sort((a, b) => {
+      const va = editedRows[a]?.[sortCol!] ?? "";
+      const vb = editedRows[b]?.[sortCol!] ?? "";
+      const na = typeof va === "number" ? va : parseFloat(va);
+      const nb = typeof vb === "number" ? vb : parseFloat(vb);
+      if (!isNaN(na) && !isNaN(nb)) {
+        return sortDir === "asc" ? na - nb : nb - na;
+      }
+      const sa = String(va).toLowerCase();
+      const sb = String(vb).toLowerCase();
+      return sortDir === "asc" ? sa.localeCompare(sb) : sb.localeCompare(sa);
+    });
   }
 
   /* --- Invoice Manual Entry --- */
@@ -816,16 +870,32 @@ export default function ClientManagePage() {
                       <thead>
                         <tr className="bg-slate-800/80">
                           {preview.columns.map((col) => (
-                            <th key={col.key} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">
+                            <th
+                              key={col.key}
+                              onClick={() => toggleSort(col.key)}
+                              className="px-3 py-2.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:text-white select-none transition-colors"
+                            >
                               {col.label}
+                              {sortCol === col.key ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
                             </th>
                           ))}
                           <th className="px-3 py-2.5 w-10" />
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800/50">
-                        {editedRows.map((row, rowIdx) => (
-                          <tr key={rowIdx} className="hover:bg-slate-800/30 transition-colors">
+                        {sortedIndexes.map((rowIdx) => {
+                          const row = editedRows[rowIdx];
+                          const isBankRow = preview.file_type === "bank_movements";
+                          const amt = row?.amount ?? 0;
+                          const rowColor = isBankRow
+                            ? amt > 0
+                              ? "bg-emerald-950/20 hover:bg-emerald-950/40"
+                              : amt < 0
+                                ? "bg-red-950/20 hover:bg-red-950/40"
+                                : "hover:bg-slate-800/30"
+                            : "hover:bg-slate-800/30";
+                          return (
+                          <tr key={rowIdx} className={`${rowColor} transition-colors`}>
                             {preview.columns.map((col) => (
                               <td key={col.key} className="px-3 py-1.5">
                                 {col.editable ? (
@@ -849,11 +919,19 @@ export default function ClientManagePage() {
                                       step={col.type === "currency" || col.type === "percent" ? "0.01" : "1"}
                                       value={row[col.key] ?? ""}
                                       onChange={(e) => updateCell(rowIdx, col.key, e.target.value)}
-                                      className="w-full bg-transparent border border-transparent hover:border-slate-700 focus:border-sky-500 rounded px-2 py-1 text-sm text-white font-mono focus:outline-none focus:ring-1 focus:ring-sky-500/50 transition-colors"
+                                      className={`w-full bg-transparent border border-transparent hover:border-slate-700 focus:border-sky-500 rounded px-2 py-1 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-sky-500/50 transition-colors ${
+                                        isBankRow && col.key === "amount"
+                                          ? amt > 0 ? "text-emerald-400" : amt < 0 ? "text-red-400" : "text-white"
+                                          : "text-white"
+                                      }`}
                                     />
                                   )
                                 ) : (
-                                  <span className="px-2 py-1 text-slate-400 font-mono text-sm">
+                                  <span className={`px-2 py-1 font-mono text-sm ${
+                                    isBankRow && col.key === "amount"
+                                      ? amt > 0 ? "text-emerald-400" : amt < 0 ? "text-red-400" : "text-slate-400"
+                                      : "text-slate-400"
+                                  }`}>
                                     {row[col.key]}
                                   </span>
                                 )}
@@ -869,7 +947,8 @@ export default function ClientManagePage() {
                               </button>
                             </td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

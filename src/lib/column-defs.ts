@@ -23,12 +23,12 @@ export const COLUMN_DEFS: Record<string, ColumnDef[]> = {
   ],
   bank_movements: [
     { key: "transaction_date", label: "Data", type: "text", editable: true },
-    { key: "description", label: "Descrizione", type: "text", editable: false },
-    { key: "counterpart", label: "Controparte", type: "text", editable: false },
+    { key: "description", label: "Descrizione", type: "text", editable: true },
+    { key: "counterpart", label: "Controparte", type: "text", editable: true },
     { key: "amount", label: "Importo €", type: "currency", editable: true },
     { key: "cost_category", label: "Cat. Uscita", type: "select", editable: true },
     { key: "income_category", label: "Cat. Entrata", type: "select", editable: true },
-    { key: "running_balance", label: "Saldo €", type: "currency", editable: false },
+    { key: "running_balance", label: "Saldo €", type: "currency", editable: true },
   ],
   amex_statement: [
     { key: "operation_date", label: "Data Op.", type: "text", editable: true },
