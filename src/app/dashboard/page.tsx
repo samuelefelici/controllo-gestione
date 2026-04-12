@@ -126,6 +126,7 @@ function DashboardContent() {
   const [period, setPeriod] = useState("");
   const [tab, setTab] = useState("overview");
   const [activeFilter, setActiveFilter] = useState<{ type: string; value: string } | null>(null);
+  const [showPeriodPicker, setShowPeriodPicker] = useState(false);
 
   useEffect(() => {
     if (!clientId) return;
@@ -294,8 +295,6 @@ function DashboardContent() {
   const ch = data.changes || {};
   const inc = data.incidence || {};
   const comp = data.computed || {};
-
-  const [showPeriodPicker, setShowPeriodPicker] = useState(false);
 
   const tabs = [
     { id: "overview", label: "Panoramica", icon: <LayoutDashboard size={14} /> },

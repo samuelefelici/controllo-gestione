@@ -156,39 +156,11 @@ function PublicDashboardContent() {
 
   const salesTop5 = useMemo(() => salesData.slice(0, 5), [salesData]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950">
-        <div className="text-center">
-          <div className="animate-spin w-10 h-10 border-2 border-sky-500 border-t-transparent rounded-full mx-auto mb-4" />
-          <p className="text-slate-500 text-sm">Caricamento dashboard...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error || !data) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 gap-4">
-        <Image src="/logo.png" alt="Felici Analytics" width={80} height={80} className="opacity-50" />
-        <p className="text-xl text-slate-400">{error || "Dashboard non disponibile"}</p>
-        <p className="text-sm text-slate-600">Verifica che il link sia corretto o contatta il tuo consulente</p>
-      </div>
-    );
-  }
-
-  const sa = data.sales?.aggregates || {};
-  const pa = data.payroll?.aggregates || {};
-  const ba = data.bank?.aggregates || {};
-  const amex = data.amex?.aggregates || {};
-  const ch = data.changes || {};
-  const inc = data.incidence || {};
-  const comp = data.computed || {};
-
   /* ═══════ P&L Cascade ═══════ */
   const pnl = useMemo(() => {
     if (!data) return null;
 
+    const pa = data.payroll?.aggregates || {};
     const costBD = data.bank?.cost_breakdown || [];
     const incomeBD = data.bank?.income_breakdown || [];
     const salesCats = data.sales?.data || [];
@@ -258,6 +230,35 @@ function PublicDashboardContent() {
       risultatoNetto,
     };
   }, [data]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-950">
+        <div className="text-center">
+          <div className="animate-spin w-10 h-10 border-2 border-sky-500 border-t-transparent rounded-full mx-auto mb-4" />
+          <p className="text-slate-500 text-sm">Caricamento dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 gap-4">
+        <Image src="/logo.png" alt="Felici Analytics" width={80} height={80} className="opacity-50" />
+        <p className="text-xl text-slate-400">{error || "Dashboard non disponibile"}</p>
+        <p className="text-sm text-slate-600">Verifica che il link sia corretto o contatta il tuo consulente</p>
+      </div>
+    );
+  }
+
+  const sa = data.sales?.aggregates || {};
+  const pa = data.payroll?.aggregates || {};
+  const ba = data.bank?.aggregates || {};
+  const amex = data.amex?.aggregates || {};
+  const ch = data.changes || {};
+  const inc = data.incidence || {};
+  const comp = data.computed || {};
 
   const tabs = [
     { id: "overview", label: "Panoramica", icon: <LayoutDashboard size={14} /> },
