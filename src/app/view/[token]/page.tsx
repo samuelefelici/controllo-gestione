@@ -193,29 +193,35 @@ function PublicDashboardContent() {
     const salesCats = data.sales?.data || [];
     const invByCat = data.invoices?.by_category || [];
 
-    const salesByType = (type: string) =>
-      salesCats.filter((c: any) => c.revenue_type === type).reduce((s: number, c: any) => s + (c.net_sales || 0), 0);
-
-    // RICAVI
-    const ricaviProdotti = salesByType("VENDITA_PRODOTTI");
-    const ricaviMT = incomeBD.filter((c: any) => { const n = (c.name || "").toUpperCase(); return n.includes("COMMISSIONI") && !n.includes("NEXI") && !n.includes("POS"); }).reduce((s: number, c: any) => s + (c.value || 0), 0);
-    const ricaviServizi = salesByType("COMMISSIONI_SERVIZI");
-    const ricaviBiglietteria = salesByType("BIGLIETTERIA");
-    const ricaviRicariche = salesByType("RICARICHE");
-    const ricaviLuggage = salesByType("LUGGAGE");
-    const ricaviNonClassificati = salesCats.filter((c: any) => !c.revenue_type || c.revenue_type === "").reduce((s: number, c: any) => s + (c.net_sales || 0), 0);
-    const altreEntrateBanca = incomeBD.filter((c: any) => { const n = (c.name || "").toUpperCase(); return n !== "INCASSO" && !n.includes("COMMISSIONI"); }).reduce((s: number, c: any) => s + (c.value || 0), 0);
-
-    const ricaviLines = [
-      { label: "Vendita Prodotti", value: ricaviProdotti, icon: <ShoppingCart size={14} /> },
-      { label: "Commissioni Money Transfer", value: ricaviMT, icon: <Banknote size={14} /> },
-      { label: "Commissioni Servizi", value: ricaviServizi, icon: <ClipboardList size={14} /> },
-      { label: "Biglietteria", value: ricaviBiglietteria, icon: <ClipboardList size={14} /> },
-      { label: "Ricariche", value: ricaviRicariche, icon: <ClipboardList size={14} /> },
-      { label: "Luggage", value: ricaviLuggage, icon: <Package size={14} /> },
-      { label: "Altre Vendite", value: ricaviNonClassificati, icon: <Tag size={14} /> },
-      { label: "Altre Entrate Bancarie", value: altreEntrateBanca, icon: <Landmark size={14} /> },
-    ].filter(l => l.value > 0);
+    // RICAVI — raggruppa vendite per revenue_type
+    const revenueTypeLabels: Record<string, { label: string; icon: any }> = {
+      VENDITA_PRODOTTI: { label: "Vendita Prodotti", icon: <ShoppingCart size={14} /> },
+      COMMISSIONI_MT: { label: "Commissioni Money Transfer", icon: <Banknote size={14} /> },
+      COMMISSIONI_SERVIZI: { label: "Commissioni Servizi", icon: <ClipboardList size={14} /> },
+      BIGLIETTERIA: { label: "Biglietteria", icon: <ClipboardList size={14} /> },
+      RICARICHE: { label: "Ricariche", icon: <ClipboardList size={14} /> },
+      LUGGAGE: { label: "Luggage", icon: <Package size={14} /> },
+    };
+    const ricaviLines: { label: string; value: number; icon: any }[] = [];
+    const salesByTypeMap: Record<string, number> = {};
+    for (const c of salesCats) {
+      const rt = c.revenue_type || "";
+      salesByTypeMap[rt] = (salesByTypeMap[rt] || 0) + (c.net_sales || 0);
+    }
+    for (const [type, total] of Object.entries(salesByTypeMap)) {
+      if (!type || total <= 0) continue;
+      const meta = revenueTypeLabels[type] || { label: type, icon: <Tag size={14} /> };
+      ricaviLines.push({ label: meta.label, value: total, icon: meta.icon });
+    }
+    const ricaviNonClassificati = salesByTypeMap[""] || 0;
+    if (ricaviNonClassificati > 0) {
+      ricaviLines.push({ label: "Altre Vendite (non classificate)", value: ricaviNonClassificati, icon: <Tag size={14} /> });
+    }
+    const altreEntrateBanca = incomeBD.filter((c: any) => { const n = (c.name || "").toUpperCase(); return n !== "INCASSO"; }).reduce((s: number, c: any) => s + (c.value || 0), 0);
+    if (altreEntrateBanca > 0) {
+      ricaviLines.push({ label: "Altre Entrate Bancarie", value: altreEntrateBanca, icon: <Landmark size={14} /> });
+    }
+    ricaviLines.sort((a, b) => b.value - a.value);
     const totaleRicavi = ricaviLines.reduce((s, l) => s + l.value, 0);
 
     // COSTI OPERATIVI (tutti i costi tranne personale)

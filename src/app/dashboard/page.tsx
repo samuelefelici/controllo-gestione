@@ -160,53 +160,51 @@ function DashboardContent() {
     const salesCats = data.sales?.data || [];
     const invByCat = data.invoices?.by_category || [];
 
-    // Helper: sum sales by revenue_type
-    const salesByType = (type: string) =>
-      salesCats
-        .filter((c: any) => c.revenue_type === type)
-        .reduce((s: number, c: any) => s + (c.net_sales || 0), 0);
-
     // ── RICAVI ──
-    // Vendita prodotti = net_sales dove revenue_type = VENDITA_PRODOTTI
-    const ricaviProdotti = salesByType("VENDITA_PRODOTTI");
+    // Labels per revenue_type (devono corrispondere ai tipi assegnati nel pannello admin "Tipo Ricavo")
+    const revenueTypeLabels: Record<string, { label: string; icon: React.ReactNode }> = {
+      VENDITA_PRODOTTI: { label: "Vendita Prodotti", icon: <ShoppingCart size={14} /> },
+      COMMISSIONI_MT: { label: "Commissioni Money Transfer", icon: <Coins size={14} /> },
+      COMMISSIONI_SERVIZI: { label: "Commissioni Servizi", icon: <Coins size={14} /> },
+      BIGLIETTERIA: { label: "Biglietteria", icon: <Coins size={14} /> },
+      RICARICHE: { label: "Ricariche", icon: <Coins size={14} /> },
+      LUGGAGE: { label: "Luggage", icon: <Package size={14} /> },
+    };
 
-    // Commissioni MT = da bank.income_breakdown (WU + RIA + MG + CONNECT), NON da sales Erply
-    const ricaviMT = incomeBD
-      .filter((c: any) => {
-        const n = (c.name || "").toUpperCase();
-        return n.includes("COMMISSIONI WU") || n.includes("COMMISSIONI RIA") || n.includes("COMMISSIONI MG") || n.includes("COMMISSIONI CONNECT") || (n.includes("COMMISSIONI") && !n.includes("NEXI") && !n.includes("POS"));
-      })
-      .reduce((s: number, c: any) => s + (c.value || 0), 0);
+    // Raggruppa vendite per revenue_type
+    const ricaviLines: { label: string; value: number; icon: React.ReactNode }[] = [];
+    const salesByTypeMap: Record<string, number> = {};
+    for (const c of salesCats) {
+      const rt = c.revenue_type || "";
+      salesByTypeMap[rt] = (salesByTypeMap[rt] || 0) + (c.net_sales || 0);
+    }
 
-    // Commissioni servizi + biglietteria + ricariche + luggage = net_sales da Erply per quei tipi
-    const ricaviServizi = salesByType("COMMISSIONI_SERVIZI");
-    const ricaviBiglietteria = salesByType("BIGLIETTERIA");
-    const ricaviRicariche = salesByType("RICARICHE");
-    const ricaviLuggage = salesByType("LUGGAGE");
+    // Aggiungi ogni revenue_type che ha un valore
+    for (const [type, total] of Object.entries(salesByTypeMap)) {
+      if (!type || total <= 0) continue; // skip vuoti
+      const meta = revenueTypeLabels[type] || { label: type, icon: <Tag size={14} /> };
+      ricaviLines.push({ label: meta.label, value: total, icon: meta.icon });
+    }
 
-    // Categorie vendita senza revenue_type assegnato — sommiamo come "Altre Vendite"
-    const ricaviNonClassificati = salesCats
-      .filter((c: any) => !c.revenue_type || c.revenue_type === "")
-      .reduce((s: number, c: any) => s + (c.net_sales || 0), 0);
+    // Categorie vendita senza revenue_type
+    const ricaviNonClassificati = salesByTypeMap[""] || 0;
+    if (ricaviNonClassificati > 0) {
+      ricaviLines.push({ label: "Altre Vendite (non classificate)", value: ricaviNonClassificati, icon: <Tag size={14} /> });
+    }
 
-    // Altre entrate bancarie non-INCASSO e non-COMMISSIONI (ecommerce, luggage app bonifici, etc.)
+    // Altre entrate bancarie non-INCASSO (C/C, etc.)
     const altreEntrateBanca = incomeBD
       .filter((c: any) => {
         const n = (c.name || "").toUpperCase();
-        return n !== "INCASSO" && !n.includes("COMMISSIONI");
+        return n !== "INCASSO";
       })
       .reduce((s: number, c: any) => s + (c.value || 0), 0);
+    if (altreEntrateBanca > 0) {
+      ricaviLines.push({ label: "Altre Entrate Bancarie", value: altreEntrateBanca, icon: <Landmark size={14} /> });
+    }
 
-    const ricaviLines = [
-      { label: "Vendita Prodotti", value: ricaviProdotti, icon: <ShoppingCart size={14} /> },
-      { label: "Commissioni Money Transfer", value: ricaviMT, icon: <Coins size={14} /> },
-      { label: "Commissioni Servizi", value: ricaviServizi, icon: <Coins size={14} /> },
-      { label: "Biglietteria", value: ricaviBiglietteria, icon: <Coins size={14} /> },
-      { label: "Ricariche", value: ricaviRicariche, icon: <Coins size={14} /> },
-      { label: "Luggage", value: ricaviLuggage, icon: <Package size={14} /> },
-      { label: "Altre Vendite", value: ricaviNonClassificati, icon: <Tag size={14} /> },
-      { label: "Altre Entrate Bancarie", value: altreEntrateBanca, icon: <Landmark size={14} /> },
-    ].filter(l => l.value > 0);
+    // Ordina per valore decrescente
+    ricaviLines.sort((a, b) => b.value - a.value);
 
     const totaleRicavi = ricaviLines.reduce((s, l) => s + l.value, 0);
 
