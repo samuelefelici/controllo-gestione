@@ -245,7 +245,7 @@ export async function GET(request: NextRequest) {
     incidence,
     computed: {
       total_costi_personale: totalCostiPersonale,
-      total_spese_banca: ba.total_out,
+      total_spese_banca: Object.values(costBreakdown).reduce((s, v) => s + v, 0),
       total_spese_amex: amexAgg.total_charges,
     },
   });
