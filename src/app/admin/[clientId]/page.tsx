@@ -836,7 +836,10 @@ export default function ClientManagePage() {
                                       className="w-full bg-slate-800 border border-slate-700 hover:border-slate-600 focus:border-sky-500 rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500/50 transition-colors"
                                     >
                                       <option value="">— Seleziona —</option>
-                                      {bankCategories.map((cat) => (
+                                      {(col.key === "income_category"
+                                        ? ["INCASSO", "COMMISSIONI", "CONTO CORRENTE"]
+                                        : bankCategories
+                                      ).map((cat) => (
                                         <option key={cat} value={cat}>{cat}</option>
                                       ))}
                                     </select>
@@ -1046,7 +1049,10 @@ export default function ClientManagePage() {
                                                 className="w-full bg-slate-800 border border-slate-700 hover:border-slate-600 focus:border-sky-500 rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500/50 transition-colors"
                                               >
                                                 <option value="">— Seleziona —</option>
-                                                {bankCategories.map((cat) => (
+                                                {(col.key === "income_category"
+                                                  ? ["INCASSO", "COMMISSIONI", "CONTO CORRENTE"]
+                                                  : bankCategories
+                                                ).map((cat) => (
                                                   <option key={cat} value={cat}>{cat}</option>
                                                 ))}
                                               </select>

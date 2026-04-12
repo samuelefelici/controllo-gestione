@@ -214,6 +214,7 @@ export async function PUT(
           running_balance: row.running_balance ?? 0,
           raw_description: row.raw_description || row.description || "",
           cost_category: row.cost_category || "",
+          income_category: row.income_category || "",
         }));
         for (let i = 0; i < insertRows.length; i += 50) {
           const { error } = await sb.from("bank_transactions").insert(insertRows.slice(i, i + 50));

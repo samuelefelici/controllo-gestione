@@ -141,11 +141,17 @@ export async function GET(request: NextRequest) {
   }
 
   // Bank income breakdown
+  // Priority: income_category (manual) > auto-mapping > subcategory
   const CONTO_CORRENTE_PATTERNS = ["BONIFICO A VOSTRO FAVORE", "BONIFICO DALL'ESTERO", "VERSAMENTO CONTANTE SELF"];
   const bankIncomeBreakdown: Record<string, number> = {};
   for (const tx of bankIn) {
-    const raw = tx.subcategory || tx.category || "Altro";
-    const key = CONTO_CORRENTE_PATTERNS.some(p => raw.toUpperCase().includes(p.toUpperCase())) ? "CONTO CORRENTE" : raw;
+    let key: string;
+    if (tx.income_category) {
+      key = tx.income_category;
+    } else {
+      const raw = tx.subcategory || tx.category || "Altro";
+      key = CONTO_CORRENTE_PATTERNS.some(p => raw.toUpperCase().includes(p.toUpperCase())) ? "CONTO CORRENTE" : raw;
+    }
     bankIncomeBreakdown[key] = (bankIncomeBreakdown[key] || 0) + tx.amount;
   }
 

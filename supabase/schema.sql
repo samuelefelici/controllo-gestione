@@ -155,6 +155,7 @@ CREATE TABLE bank_transactions (
   running_balance NUMERIC(12,2),
   raw_description TEXT,
   cost_category TEXT DEFAULT '',
+  income_category TEXT DEFAULT '',
   created_at TIMESTAMPTZ DEFAULT now()
 );
 

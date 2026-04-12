@@ -13,6 +13,7 @@ export interface BankTransaction {
   running_balance: number;  // saldo movimento
   raw_description: string;  // descrizione completa originale
   cost_category: string;    // macrocategoria costi (compilata dall'utente)
+  income_category: string;  // macrocategoria entrate (compilata dall'utente)
   rank?: number;
 }
 
@@ -236,6 +237,7 @@ export async function parseBankMovementsPDF(
             running_balance: saldo,
             raw_description: descrizione,
             cost_category: "",
+            income_category: "",
             rank: transactions.length + 1,
           });
         }

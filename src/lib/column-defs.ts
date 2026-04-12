@@ -26,7 +26,8 @@ export const COLUMN_DEFS: Record<string, ColumnDef[]> = {
     { key: "description", label: "Descrizione", type: "text", editable: false },
     { key: "counterpart", label: "Controparte", type: "text", editable: false },
     { key: "amount", label: "Importo €", type: "currency", editable: true },
-    { key: "cost_category", label: "Macrocategoria", type: "select", editable: true },
+    { key: "cost_category", label: "Cat. Uscita", type: "select", editable: true },
+    { key: "income_category", label: "Cat. Entrata", type: "select", editable: true },
     { key: "running_balance", label: "Saldo €", type: "currency", editable: false },
   ],
   amex_statement: [

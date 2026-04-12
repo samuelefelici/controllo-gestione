@@ -1161,13 +1161,14 @@ function DashboardContent() {
                       <th className="text-left p-3 font-medium">Data</th>
                       <th className="text-left p-3 font-medium">Descrizione</th>
                       <th className="text-left p-3 font-medium">Causale</th>
+                      <th className="text-left p-3 font-medium">Categoria</th>
                       <th className="text-right p-3 font-medium">Importo</th>
                       <th className="text-right p-3 font-medium">Saldo</th>
                     </tr>
                   </thead>
                   <tbody>
                     {(data.bank?.transactions || [])
-                      .filter((tx: any) => !activeFilter || activeFilter.type !== "causale" || tx.cost_category === activeFilter.value || tx.subcategory === activeFilter.value || tx.category === activeFilter.value)
+                      .filter((tx: any) => !activeFilter || activeFilter.type !== "causale" || tx.cost_category === activeFilter.value || tx.income_category === activeFilter.value || tx.subcategory === activeFilter.value || tx.category === activeFilter.value)
                       .map((tx: any, i: number) => (
                       <tr key={i} className="border-b border-slate-800/20 hover:bg-slate-800/20 transition">
                         <td className="p-3 font-mono text-slate-500 whitespace-nowrap">{tx.transaction_date}</td>
@@ -1178,6 +1179,31 @@ function DashboardContent() {
                           }`}>
                             {tx.subcategory || tx.category}
                           </span>
+                        </td>
+                        <td className="p-3">
+                          {tx.amount > 0 ? (
+                            <select
+                              value={tx.income_category || ""}
+                              onChange={async (e) => {
+                                const val = e.target.value;
+                                tx.income_category = val;
+                                setData({ ...data });
+                                await fetch("/api/bank-transactions", {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ id: tx.id, income_category: val }),
+                                });
+                              }}
+                              className="bg-slate-800 border border-slate-700 hover:border-slate-600 focus:border-sky-500 rounded px-1.5 py-0.5 text-[10px] text-white focus:outline-none transition-colors"
+                            >
+                              <option value="">— Auto —</option>
+                              <option value="INCASSO">INCASSO</option>
+                              <option value="COMMISSIONI">COMMISSIONI</option>
+                              <option value="CONTO CORRENTE">CONTO CORRENTE</option>
+                            </select>
+                          ) : (
+                            <span className="text-slate-600 text-[10px]">—</span>
+                          )}
                         </td>
                         <td className={`p-3 text-right font-mono font-semibold ${tx.amount > 0 ? "text-emerald-400" : "text-red-400"}`}>
                           {tx.amount > 0 ? "+" : ""}{fmt2(tx.amount)}
