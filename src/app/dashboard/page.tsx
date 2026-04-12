@@ -966,12 +966,19 @@ function DashboardContent() {
         ══════════════════════════════════════════════════════ */}
         {tab === "cashflow" && (
           <>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <KPI icon={<ArrowDownToLine size={18} />} label="Entrate C/C" value={fmt(ba.total_in || 0)} change={ch.bank_in} color="text-emerald-400" />
-              <KPI icon={<ArrowUpFromLine size={18} />} label="Uscite C/C" value={fmt(ba.total_out || 0)} change={ch.bank_out} color="text-red-400" />
-              <KPI icon={<Landmark size={18} />} label="Saldo Iniziale" value={fmt(ba.opening_balance || 0)} color="text-slate-400" />
-              <KPI icon={<Landmark size={18} />} label="Saldo Finale" value={fmt(ba.closing_balance || 0)} color="text-emerald-400" />
-            </div>
+            {(() => {
+              const entrateCc = (data.bank?.income_breakdown || [])
+                .filter((b: any) => b.name === "CONTO CORRENTE")
+                .reduce((s: number, b: any) => s + (b.value || 0), 0);
+              return (
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <KPI icon={<ArrowDownToLine size={18} />} label="Entrate C/C" value={fmt(entrateCc)} color="text-emerald-400" />
+                  <KPI icon={<ArrowUpFromLine size={18} />} label="Uscite C/C" value={fmt(ba.total_out || 0)} change={ch.bank_out} color="text-red-400" />
+                  <KPI icon={<Landmark size={18} />} label="Saldo Iniziale" value={fmt(ba.opening_balance || 0)} color="text-slate-400" />
+                  <KPI icon={<Landmark size={18} />} label="Saldo Finale" value={fmt(ba.closing_balance || 0)} color="text-emerald-400" />
+                </div>
+              );
+            })()}
 
             {/* Balance chart */}
             {data.bank?.daily_balance?.length > 0 && (
@@ -1018,7 +1025,8 @@ function DashboardContent() {
 
               const incassi = ibVal("INCASSO");
               const commEntrata = ibVal("COMMISSIONI");
-              const altreEntrate = Math.max(totalIn - incassi - commEntrata, 0);
+              const contoCorrente = ibVal("CONTO CORRENTE");
+              const altreEntrate = Math.max(totalIn - incassi - commEntrata - contoCorrente, 0);
               const stipendi = cbVal("STIPENDI");
               const fornitori = cbVal("ACQUISTO MERCE", "MERCE") + (data.invoices?.total || 0);
               const nexi = cbVal("COMMISSIONI NEXI", "COMMISSIONI POS", "NEXI");
@@ -1032,6 +1040,7 @@ function DashboardContent() {
               const entrate = [
                 { name: "Incassi", value: incassi },
                 { name: "Comm.", value: commEntrata },
+                { name: "C/C", value: contoCorrente },
                 { name: "Altro +", value: altreEntrate },
               ];
               entrate.forEach(e => {
