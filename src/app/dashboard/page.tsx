@@ -17,9 +17,10 @@ import {
 
 /* ═══════ Helpers ═══════ */
 const fmt = (v: number) =>
+  new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
+const fmt2 = fmt;
+const fmtAxis = (v: number) =>
   new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v);
-const fmt2 = (v: number) =>
-  new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", minimumFractionDigits: 2 }).format(v);
 const fmtPct = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
 const PERIOD_LABELS: Record<string, string> = {
   "01":"Gen","02":"Feb","03":"Mar","04":"Apr","05":"Mag","06":"Giu",
@@ -486,7 +487,7 @@ function DashboardContent() {
                   <ResponsiveContainer width="100%" height={220}>
                     <BarChart data={salesTop5} layout="vertical" margin={{ left: 80 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                      <XAxis type="number" tick={{ fill: "#64748b", fontSize: 10 }} tickFormatter={(v) => fmt(v)} />
+                      <XAxis type="number" tick={{ fill: "#64748b", fontSize: 10 }} tickFormatter={(v) => fmtAxis(v)} />
                       <YAxis dataKey="category_name" type="category" tick={{ fill: "#94a3b8", fontSize: 10 }} width={75} />
                       <Tooltip content={<CustomTooltip />} />
                       <Bar dataKey="net_sales" name="Vendite" fill="#0ea5e9" radius={[0, 6, 6, 0]} />
@@ -509,7 +510,7 @@ function DashboardContent() {
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                       <XAxis dataKey="date" tick={{ fill: "#64748b", fontSize: 9 }} tickFormatter={(d) => d.substring(8)} />
-                      <YAxis tick={{ fill: "#64748b", fontSize: 10 }} tickFormatter={(v) => fmt(v)} />
+                      <YAxis tick={{ fill: "#64748b", fontSize: 10 }} tickFormatter={(v) => fmtAxis(v)} />
                       <Tooltip content={<CustomTooltip />} />
                       <Area type="monotone" dataKey="balance" name="Saldo" stroke="#10b981" fill="url(#balGrad)" strokeWidth={2} />
                     </AreaChart>
@@ -573,7 +574,7 @@ function DashboardContent() {
                       if (e?.activeLabel) setActiveFilter(activeFilter?.value === e.activeLabel ? null : { type: "sales_cat", value: e.activeLabel });
                     }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                      <XAxis type="number" tick={{ fill: "#64748b", fontSize: 10 }} tickFormatter={v => fmt(v)} />
+                      <XAxis type="number" tick={{ fill: "#64748b", fontSize: 10 }} tickFormatter={v => fmtAxis(v)} />
                       <YAxis dataKey="category_name" type="category" tick={{ fill: "#94a3b8", fontSize: 9 }} width={95} />
                       <Tooltip content={<CustomTooltip />} />
                       <Bar dataKey="net_sales" name="Netto" radius={[0, 4, 4, 0]} cursor="pointer">
@@ -852,40 +853,6 @@ function DashboardContent() {
                 </div>
               </Card>
             )}
-
-            {/* Amex transaction list */}
-            {data.amex?.transactions?.length > 0 && (
-              <Card className="overflow-hidden">
-                <div className="px-5 py-3 border-b border-slate-800/60 flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-white">Dettaglio Operazioni Amex</h3>
-                  <span className="text-xs text-slate-500 font-mono">{amex.count} operazioni</span>
-                </div>
-                <div className="max-h-[400px] overflow-y-auto">
-                  <table className="w-full text-xs">
-                    <thead className="sticky top-0 bg-slate-900">
-                      <tr className="border-b border-slate-800 text-slate-500">
-                        <th className="text-left p-3 font-medium">Data</th>
-                        <th className="text-left p-3 font-medium">Descrizione</th>
-                        <th className="text-left p-3 font-medium">Categoria</th>
-                        <th className="text-right p-3 font-medium">Importo</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.amex.transactions
-                        .filter((tx: any) => !activeFilter || activeFilter.type !== "cost_cat" || tx.cost_category === activeFilter.value)
-                        .map((tx: any, i: number) => (
-                        <tr key={i} className="border-b border-slate-800/20 hover:bg-slate-800/20">
-                          <td className="p-3 font-mono text-slate-500 whitespace-nowrap">{tx.operation_date}</td>
-                          <td className="p-3 text-slate-300 max-w-[250px] truncate">{tx.description}</td>
-                          <td className="p-3"><span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[10px]">{tx.category}</span></td>
-                          <td className={`p-3 text-right font-mono font-semibold ${tx.amount_eur > 0 ? "text-red-400" : "text-emerald-400"}`}>{fmt2(tx.amount_eur)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </Card>
-            )}
           </>
         )}
 
@@ -980,7 +947,7 @@ function DashboardContent() {
                   }))}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                     <XAxis dataKey="name" tick={{ fill: "#94a3b8", fontSize: 10 }} />
-                    <YAxis tick={{ fill: "#64748b", fontSize: 10 }} tickFormatter={v => fmt(v)} />
+                    <YAxis tick={{ fill: "#64748b", fontSize: 10 }} tickFormatter={v => fmtAxis(v)} />
                     <Tooltip content={<CustomTooltip />} />
                     <Legend />
                     <Bar dataKey="Netto" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} />
@@ -1020,7 +987,7 @@ function DashboardContent() {
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                     <XAxis dataKey="date" tick={{ fill: "#64748b", fontSize: 9 }} tickFormatter={d => d.substring(8)} />
-                    <YAxis tick={{ fill: "#64748b", fontSize: 10 }} tickFormatter={v => fmt(v)} />
+                    <YAxis tick={{ fill: "#64748b", fontSize: 10 }} tickFormatter={v => fmtAxis(v)} />
                     <Tooltip content={<CustomTooltip />} />
                     <Legend />
                     <Area type="monotone" dataKey="balance" name="Saldo" stroke="#10b981" fill="url(#balGrad2)" strokeWidth={2} />
@@ -1096,7 +1063,7 @@ function DashboardContent() {
                     <BarChart data={steps} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                       <XAxis dataKey="name" tick={{ fill: "#94a3b8", fontSize: 9 }} />
-                      <YAxis tick={{ fill: "#64748b", fontSize: 10 }} tickFormatter={v => fmt(v)} />
+                      <YAxis tick={{ fill: "#64748b", fontSize: 10 }} tickFormatter={v => fmtAxis(v)} />
                       <Tooltip
                         content={({ active, payload }: any) => {
                           if (!active || !payload?.length) return null;
@@ -1314,7 +1281,7 @@ function DashboardContent() {
                   }))}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                     <XAxis dataKey="period" tick={{ fill: "#64748b", fontSize: 10 }} />
-                    <YAxis tick={{ fill: "#64748b", fontSize: 10 }} tickFormatter={v => fmt(v)} />
+                    <YAxis tick={{ fill: "#64748b", fontSize: 10 }} tickFormatter={v => fmtAxis(v)} />
                     <Tooltip content={<CustomTooltip />} />
                     <Legend />
                     <Bar dataKey="Ricavi" fill="#10b981" opacity={0.5} radius={[4, 4, 0, 0]} />
