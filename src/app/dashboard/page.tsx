@@ -358,115 +358,224 @@ function DashboardContent() {
           <FilterBadge label={activeFilter.value} onClear={() => setActiveFilter(null)} />
         )}
         {/* ══════════════════════════════════════════════════════
-            TAB: OVERVIEW
+            TAB: OVERVIEW — Cruscotto Direzionale
         ══════════════════════════════════════════════════════ */}
-        {tab === "overview" && (
-          <>
-            {/* Hero KPIs */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <KPI icon={<ShoppingCart size={18} />} label="Vendite Nette" value={fmt(sa.total_net_sales || 0)} sub={`${sa.total_qty || 0} pezzi venduti`} change={ch.sales_net} />
-              <KPI icon={<Users size={18} />} label="Costo Personale" value={fmt(comp.total_costi_personale || 0)} sub={`${pa.employee_count || 0} dipendenti`} change={ch.payroll_gross} color="text-amber-400" />
-              <KPI icon={<Landmark size={18} />} label="Saldo C/C" value={fmt(ba.closing_balance || 0)} sub={`${ba.transaction_count || 0} movimenti`} color="text-emerald-400" />
-              <KPI icon={<CreditCard size={18} />} label="Spese Amex" value={fmt(amex.total_charges || 0)} sub={`${amex.count || 0} operazioni`} change={ch.amex} color="text-purple-400" />
-            </div>
+        {tab === "overview" && pnl && (() => {
+          const cbTotal = (data.bank?.cost_breakdown || []).reduce((s: number, c: any) => s + (c.value || 0), 0);
+          const invTotal = data.invoices?.total || 0;
+          const costiOpTot = cbTotal + invTotal;
+          const personaleTot = comp.total_costi_personale || 0;
+          const costiTotMese = costiOpTot + personaleTot;
 
-            {/* Strategic KPIs */}
-            {pnl && (
-              <Card className="p-4">
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          // Semaforo helper
+          const signal = (val: number, green: number, yellow: number) =>
+            val >= green ? "text-emerald-400" : val >= yellow ? "text-amber-400" : "text-red-400";
+          const signalBg = (val: number, green: number, yellow: number) =>
+            val >= green ? "bg-emerald-500" : val >= yellow ? "bg-amber-500" : "bg-red-500";
+
+          return (
+            <>
+              {/* ── RIGA 1: P&L Sintetico ── */}
+              <Card className="p-5">
+                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">Sintesi Economica del Mese</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   {[
-                    { label: "Margine Lordo", value: `${pnl.kpi.margineLordoPct.toFixed(1)}%`, color: pnl.kpi.margineLordoPct >= 40 ? "text-emerald-400" : pnl.kpi.margineLordoPct >= 20 ? "text-amber-400" : "text-red-400" },
-                    { label: "EBITDA %", value: `${pnl.kpi.ebitdaPct.toFixed(1)}%`, color: pnl.kpi.ebitdaPct >= 15 ? "text-emerald-400" : pnl.kpi.ebitdaPct >= 5 ? "text-amber-400" : "text-red-400" },
-                    { label: "Fatt./Dipendente", value: fmt(pnl.kpi.fatturatoPerDip), color: "text-sky-400" },
-                    { label: "Cash Burn/gg", value: fmt(pnl.kpi.cashBurn), color: "text-orange-400" },
-                    { label: "Days of Cash", value: `${pnl.kpi.daysOfCash.toFixed(0)}gg`, color: pnl.kpi.daysOfCash >= 60 ? "text-emerald-400" : pnl.kpi.daysOfCash >= 30 ? "text-amber-400" : "text-red-400" },
-                  ].map((kpi, i) => (
-                    <div key={i} className="text-center">
-                      <div className={`text-lg font-mono font-bold ${kpi.color}`}>{kpi.value}</div>
-                      <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-1">{kpi.label}</div>
+                    { label: "Ricavi", value: pnl.totaleRicavi, color: "text-emerald-400", border: "border-emerald-500/30" },
+                    { label: "Costi Operativi", value: costiOpTot, color: "text-red-400", border: "border-red-500/30", neg: true },
+                    { label: "Personale", value: personaleTot, color: "text-amber-400", border: "border-amber-500/30", neg: true },
+                    { label: "Risultato Netto", value: pnl.risultatoNetto, color: pnl.risultatoNetto >= 0 ? "text-emerald-400" : "text-red-400", border: pnl.risultatoNetto >= 0 ? "border-emerald-500/30" : "border-red-500/30", bold: true },
+                  ].map((item: any, i) => (
+                    <div key={i} className={`rounded-xl border ${item.border} bg-slate-800/30 p-4 text-center`}>
+                      <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-2">{item.label}</div>
+                      <div className={`text-xl font-bold font-mono ${item.color}`}>
+                        {item.neg ? "−" : ""}{fmt(Math.abs(item.value))}
+                      </div>
                     </div>
                   ))}
                 </div>
+                {/* Barra visiva Ricavi vs Costi */}
+                <div className="mt-4 space-y-1.5">
+                  <div className="flex items-center justify-between text-[10px] text-slate-500">
+                    <span>Ricavi {fmt(pnl.totaleRicavi)}</span>
+                    <span>Costi {fmt(costiTotMese)}</span>
+                  </div>
+                  <div className="w-full h-3 bg-slate-800 rounded-full overflow-hidden flex">
+                    {pnl.totaleRicavi > 0 && (
+                      <>
+                        <div className="h-full bg-emerald-500/70 transition-all" style={{ width: `${Math.min((pnl.totaleRicavi / Math.max(pnl.totaleRicavi, costiTotMese)) * 100, 100)}%` }} />
+                      </>
+                    )}
+                  </div>
+                  <div className="w-full h-3 bg-slate-800 rounded-full overflow-hidden flex">
+                    {costiTotMese > 0 && pnl.totaleRicavi > 0 && (
+                      <>
+                        <div className="h-full bg-red-500/50 transition-all" style={{ width: `${Math.min((costiOpTot / Math.max(pnl.totaleRicavi, costiTotMese)) * 100, 100)}%` }} />
+                        <div className="h-full bg-amber-500/50 transition-all" style={{ width: `${Math.min((personaleTot / Math.max(pnl.totaleRicavi, costiTotMese)) * 100, 100)}%` }} />
+                      </>
+                    )}
+                  </div>
+                  <div className="flex gap-4 text-[10px] text-slate-600 mt-1">
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500/70" /> Ricavi</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500/50" /> Costi Op.</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500/50" /> Personale</span>
+                  </div>
+                </div>
               </Card>
-            )}
 
-            {/* Charts row */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {/* Top categories */}
-              {salesTop5.length > 0 && (
-                <Card className="p-5">
-                  <h3 className="text-sm font-semibold text-white mb-4">Top 5 Categorie Vendita</h3>
-                  <ResponsiveContainer width="100%" height={220}>
-                    <BarChart data={salesTop5} layout="vertical" margin={{ left: 80 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                      <XAxis type="number" tick={{ fill: "#64748b", fontSize: 10 }} tickFormatter={(v) => fmtAxis(v)} />
-                      <YAxis dataKey="category_name" type="category" tick={{ fill: "#94a3b8", fontSize: 10 }} width={75} />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Bar dataKey="net_sales" name="Vendite" fill="#0ea5e9" radius={[0, 6, 6, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </Card>
-              )}
-
-              {/* Bank balance trend */}
-              {data.bank?.daily_balance?.length > 0 && (
-                <Card className="p-5">
-                  <h3 className="text-sm font-semibold text-white mb-4">Andamento Saldo C/C</h3>
-                  <ResponsiveContainer width="100%" height={220}>
-                    <AreaChart data={data.bank.daily_balance}>
-                      <defs>
-                        <linearGradient id="balGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                      <XAxis dataKey="date" tick={{ fill: "#64748b", fontSize: 9 }} tickFormatter={(d) => d.substring(8)} />
-                      <YAxis tick={{ fill: "#64748b", fontSize: 10 }} tickFormatter={(v) => fmtAxis(v)} />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Area type="monotone" dataKey="balance" name="Saldo" stroke="#10b981" fill="url(#balGrad)" strokeWidth={2} />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </Card>
-              )}
-            </div>
-
-            {/* Quick summary: cost composition */}
-            <Card className="p-5">
-              <h3 className="text-sm font-semibold text-white mb-4">Composizione Costi del Mese</h3>
-              <div className="space-y-3">
-                {(() => {
-                  const cbTotal = (data.cost_breakdown || []).reduce((s: number, c: { value: number }) => s + c.value, 0);
-                  const invTotal = data.invoices?.total || 0;
-                  const items = [
-                    { label: "Personale (lordo + TFR)", value: comp.total_costi_personale, color: "#f59e0b", icon: <Users size={16} /> },
-                    { label: "Costi Operativi", value: cbTotal, color: "#ef4444", icon: <Landmark size={16} /> },
-                    { label: "Fatture Fornitori", value: invTotal, color: "#f97316", icon: <Receipt size={16} /> },
-                  ];
-                  const total = (comp.total_costi_personale || 0) + cbTotal + invTotal;
-                  return items.map((item, i) => {
-                  const pct = total > 0 ? ((item.value || 0) / total * 100) : 0;
-                  return (
-                    <div key={i} className="flex items-center gap-4">
-                      <span className="w-8 text-center flex items-center justify-center text-slate-400">{item.icon}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs text-slate-400">{item.label}</span>
-                          <span className="text-sm font-mono font-semibold text-white">{fmt(item.value || 0)}</span>
-                        </div>
-                        <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
-                          <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: item.color }} />
-                        </div>
-                      </div>
-                      <span className="text-xs font-mono text-slate-500 w-12 text-right">{pct.toFixed(0)}%</span>
+              {/* ── RIGA 2: Indicatori Chiave con Semafori ── */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                {[
+                  {
+                    label: "Margine Operativo",
+                    value: `${pnl.kpi.margineLordoPct.toFixed(1)}%`,
+                    sub: fmt(pnl.totaleRicavi - costiOpTot),
+                    color: signal(pnl.kpi.margineLordoPct, 35, 20),
+                    dot: signalBg(pnl.kpi.margineLordoPct, 35, 20),
+                  },
+                  {
+                    label: "Risultato Netto %",
+                    value: `${pnl.kpi.ebitdaPct.toFixed(1)}%`,
+                    sub: fmt(pnl.risultatoNetto),
+                    color: signal(pnl.kpi.ebitdaPct, 10, 3),
+                    dot: signalBg(pnl.kpi.ebitdaPct, 10, 3),
+                  },
+                  {
+                    label: "Incidenza Personale",
+                    value: `${(inc.staff_on_sales || 0).toFixed(1)}%`,
+                    sub: `${pa.employee_count || 0} dipendenti`,
+                    color: signal(100 - (inc.staff_on_sales || 0), 70, 55),
+                    dot: signalBg(100 - (inc.staff_on_sales || 0), 70, 55),
+                  },
+                  {
+                    label: "Liquidità",
+                    value: fmt(ba.closing_balance || 0),
+                    sub: `${pnl.kpi.daysOfCash.toFixed(0)} giorni di cassa`,
+                    color: signal(pnl.kpi.daysOfCash, 60, 30),
+                    dot: signalBg(pnl.kpi.daysOfCash, 60, 30),
+                  },
+                  {
+                    label: "Fatt. / Dipendente",
+                    value: fmt(pnl.kpi.fatturatoPerDip),
+                    sub: `su ${pa.employee_count || 0} dip.`,
+                    color: "text-sky-400",
+                    dot: "bg-sky-500",
+                  },
+                ].map((kpi, i) => (
+                  <div key={i} className="bg-slate-900/80 backdrop-blur rounded-2xl p-4 border border-slate-800/60">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className={`w-2 h-2 rounded-full ${kpi.dot}`} />
+                      <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">{kpi.label}</span>
                     </div>
-                  );
-                });
-                })()}
+                    <div className={`text-xl font-bold font-mono ${kpi.color}`}>{kpi.value}</div>
+                    <div className="text-[10px] text-slate-600 mt-1">{kpi.sub}</div>
+                  </div>
+                ))}
               </div>
-            </Card>
-          </>
-        )}
+
+              {/* ── RIGA 3: Ricavi vs mese prec + Saldo C/C ── */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Variazioni vs mese precedente */}
+                <Card className="p-5">
+                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">Variazioni vs Mese Precedente</h3>
+                  <div className="space-y-3">
+                    {[
+                      { label: "Vendite Nette", change: ch.sales_net, value: sa.total_net_sales, icon: <ShoppingCart size={14} /> },
+                      { label: "Personale", change: ch.payroll_gross, value: comp.total_costi_personale, icon: <Users size={14} /> },
+                      { label: "Flusso Banca (uscite)", change: ch.bank_out, value: ba.total_out, icon: <Landmark size={14} /> },
+                      { label: "Spese Amex", change: ch.amex, value: amex.total_charges, icon: <CreditCard size={14} /> },
+                      { label: "Fatture Fornitori", change: ch.invoices, value: data.invoices?.total || 0, icon: <Receipt size={14} /> },
+                    ].map((item, i) => (
+                      <div key={i} className="flex items-center gap-3">
+                        <span className="text-slate-600 w-5 flex-shrink-0">{item.icon}</span>
+                        <span className="text-xs text-slate-400 flex-1">{item.label}</span>
+                        <span className="text-xs font-mono text-slate-300 w-24 text-right">{fmt(item.value || 0)}</span>
+                        {item.change !== null && item.change !== undefined ? (
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full w-20 text-center ${
+                            item.change >= 0 ? "bg-emerald-950 text-emerald-400" : "bg-red-950 text-red-400"
+                          }`}>
+                            {fmtPct(item.change)}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-slate-700 w-20 text-center">n/d</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+
+                {/* Andamento saldo C/C */}
+                {data.bank?.daily_balance?.length > 0 && (
+                  <Card className="p-5">
+                    <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">Andamento Saldo C/C</h3>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <AreaChart data={data.bank.daily_balance}>
+                        <defs>
+                          <linearGradient id="balGradOv" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                            <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                        <XAxis dataKey="date" tick={{ fill: "#64748b", fontSize: 9 }} tickFormatter={(d) => d.substring(8)} />
+                        <YAxis tick={{ fill: "#64748b", fontSize: 10 }} tickFormatter={(v) => fmtAxis(v)} />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Area type="monotone" dataKey="balance" name="Saldo" stroke="#10b981" fill="url(#balGradOv)" strokeWidth={2} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </Card>
+                )}
+              </div>
+
+              {/* ── RIGA 4: Composizione costi a torta ── */}
+              <Card className="p-5">
+                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">Dove vanno i soldi</h3>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
+                  {/* Donut */}
+                  <div>
+                    {(() => {
+                      const pieItems = [
+                        { name: "Costi Operativi", value: cbTotal, color: "#ef4444" },
+                        { name: "Fatture Fornitori", value: invTotal, color: "#f97316" },
+                        { name: "Personale", value: personaleTot, color: "#f59e0b" },
+                      ].filter(p => p.value > 0);
+                      return (
+                        <ResponsiveContainer width="100%" height={200}>
+                          <PieChart>
+                            <Pie data={pieItems} dataKey="value" cx="50%" cy="50%" innerRadius={55} outerRadius={85} strokeWidth={2} stroke="#020617">
+                              {pieItems.map((e, i) => <Cell key={i} fill={e.color} />)}
+                            </Pie>
+                            <Tooltip content={<CustomTooltip />} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      );
+                    })()}
+                  </div>
+                  {/* Dettaglio numerico */}
+                  <div className="space-y-3">
+                    {[
+                      { label: "Costi Operativi", value: cbTotal, pct: costiTotMese > 0 ? (cbTotal / costiTotMese * 100) : 0, color: "#ef4444" },
+                      { label: "Fatture Fornitori", value: invTotal, pct: costiTotMese > 0 ? (invTotal / costiTotMese * 100) : 0, color: "#f97316" },
+                      { label: "Personale (lordo + TFR)", value: personaleTot, pct: costiTotMese > 0 ? (personaleTot / costiTotMese * 100) : 0, color: "#f59e0b" },
+                    ].map((item, i) => (
+                      <div key={i} className="flex items-center gap-3">
+                        <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: item.color }} />
+                        <span className="text-xs text-slate-400 flex-1">{item.label}</span>
+                        <span className="text-sm font-mono font-semibold text-white">{fmt(item.value)}</span>
+                        <span className="text-xs font-mono text-slate-500 w-10 text-right">{item.pct.toFixed(0)}%</span>
+                      </div>
+                    ))}
+                    <div className="border-t border-slate-800 pt-2 flex items-center gap-3">
+                      <div className="w-3 h-3" />
+                      <span className="text-xs text-white font-semibold flex-1">Totale Costi</span>
+                      <span className="text-sm font-mono font-bold text-white">{fmt(costiTotMese)}</span>
+                      <span className="text-xs font-mono text-slate-500 w-10 text-right">100%</span>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            </>
+          );
+        })()}
 
         {/* ══════════════════════════════════════════════════════
             TAB: VENDITE
