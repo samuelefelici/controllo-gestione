@@ -295,6 +295,8 @@ function DashboardContent() {
   const inc = data.incidence || {};
   const comp = data.computed || {};
 
+  const [showPeriodPicker, setShowPeriodPicker] = useState(false);
+
   const tabs = [
     { id: "overview", label: "Panoramica", icon: <LayoutDashboard size={14} /> },
     { id: "sales", label: "Vendite", icon: <ShoppingCart size={14} /> },
@@ -318,15 +320,56 @@ function DashboardContent() {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <select
-                value={period}
-                onChange={e => setPeriod(e.target.value)}
-                className="bg-slate-800/80 border border-slate-700/50 rounded-lg px-3 py-1.5 text-white text-xs font-mono focus:ring-2 focus:ring-sky-500/50 focus:outline-none"
-              >
-                {(data.available_periods || [period]).map((p: string) => (
-                  <option key={p} value={p}>{periodLabel(p)}</option>
-                ))}
-              </select>
+              <div className="relative">
+                <button
+                  onClick={() => setShowPeriodPicker(!showPeriodPicker)}
+                  className="bg-slate-800/80 border border-slate-700/50 rounded-lg px-4 py-1.5 text-white text-xs font-semibold hover:border-sky-500/50 transition flex items-center gap-2"
+                >
+                  <span className="text-sky-400 font-mono">{periodLabel(period)}</span>
+                  <svg className={`w-3 h-3 text-slate-500 transition-transform ${showPeriodPicker ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                </button>
+                {showPeriodPicker && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowPeriodPicker(false)} />
+                    <div className="absolute right-0 top-full mt-2 z-50 bg-slate-900 border border-slate-700/60 rounded-xl shadow-2xl p-4 min-w-[280px]">
+                      <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-3">Seleziona Mese</p>
+                      {(() => {
+                        const periods = data.available_periods || [period];
+                        const byYear: Record<string, string[]> = {};
+                        for (const p of periods) {
+                          const [y] = p.split("-");
+                          if (!byYear[y]) byYear[y] = [];
+                          byYear[y].push(p);
+                        }
+                        return Object.entries(byYear).sort(([a], [b]) => b.localeCompare(a)).map(([year, months]) => (
+                          <div key={year} className="mb-3 last:mb-0">
+                            <p className="text-xs font-semibold text-slate-400 mb-1.5">{year}</p>
+                            <div className="grid grid-cols-4 gap-1.5">
+                              {months.sort().map(p => {
+                                const [, m] = p.split("-");
+                                const isActive = p === period;
+                                return (
+                                  <button
+                                    key={p}
+                                    onClick={() => { setPeriod(p); setShowPeriodPicker(false); }}
+                                    className={`px-2 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                                      isActive
+                                        ? "bg-sky-600 text-white shadow-lg shadow-sky-500/20"
+                                        : "bg-slate-800/60 text-slate-400 hover:bg-slate-700/60 hover:text-white"
+                                    }`}
+                                  >
+                                    {PERIOD_LABELS[m] || m}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  </>
+                )}
+              </div>
               <Link href={`/admin/${clientId}`} className="text-xs text-slate-500 hover:text-sky-400 transition hidden sm:block">
                 <ArrowUpFromLine size={12} className="inline mr-1" />Carica file
               </Link>
