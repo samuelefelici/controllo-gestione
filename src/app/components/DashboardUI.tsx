@@ -304,28 +304,30 @@ export default function DashboardUI({ data, loading, error, period, setPeriod, s
                     <div className="absolute right-0 top-full mt-2 z-50 bg-slate-900 border border-slate-700/60 rounded-xl shadow-2xl p-4 min-w-[280px]">
                       <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-3">Seleziona Mese</p>
                       {(() => {
-                        const periods = data.available_periods || [period];
-                        const byYear: Record<string, string[]> = {};
-                        for (const p of periods) {
-                          const [y] = p.split("-");
-                          if (!byYear[y]) byYear[y] = [];
-                          byYear[y].push(p);
-                        }
-                        return Object.entries(byYear).sort(([a], [b]) => b.localeCompare(a)).map(([year, months]) => (
+                        const periodsArr: string[] = data.available_periods || [period];
+                        const periods = new Set(periodsArr);
+                        const years = new Set<string>();
+                        for (const p of periodsArr) years.add(p.split("-")[0]);
+                        const ALL_MONTHS = ["01","02","03","04","05","06","07","08","09","10","11","12"];
+                        return Array.from(years).sort().reverse().map(year => (
                           <div key={year} className="mb-3 last:mb-0">
                             <p className="text-xs font-semibold text-slate-400 mb-1.5">{year}</p>
                             <div className="grid grid-cols-4 gap-1.5">
-                              {months.sort().map(p => {
-                                const [, m] = p.split("-");
+                              {ALL_MONTHS.map(m => {
+                                const p = `${year}-${m}`;
+                                const hasData = periods.has(p);
                                 const isActive = p === period;
                                 return (
                                   <button
                                     key={p}
-                                    onClick={() => { setPeriod(p); setShowPeriodPicker(false); }}
+                                    disabled={!hasData}
+                                    onClick={() => { if (hasData) { setPeriod(p); setShowPeriodPicker(false); } }}
                                     className={`px-2 py-1.5 rounded-lg text-xs font-medium transition-all ${
                                       isActive
                                         ? "bg-sky-600 text-white shadow-lg shadow-sky-500/20"
-                                        : "bg-slate-800/60 text-slate-400 hover:bg-slate-700/60 hover:text-white"
+                                        : hasData
+                                          ? "bg-slate-800/60 text-slate-400 hover:bg-slate-700/60 hover:text-white cursor-pointer"
+                                          : "bg-slate-900/30 text-slate-700 cursor-not-allowed"
                                     }`}
                                   >
                                     {PERIOD_LABELS[m] || m}
