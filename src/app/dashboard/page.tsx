@@ -160,27 +160,6 @@ function DashboardContent() {
     const salesCats = data.sales?.data || [];
     const invByCat = data.invoices?.by_category || [];
 
-    // Helper: find cost_breakdown value by partial name match (case insensitive)
-    const costVal = (...patterns: string[]) =>
-      costBD
-        .filter((c: any) => patterns.some(p => c.name?.toUpperCase().includes(p.toUpperCase())))
-        .reduce((s: number, c: any) => s + (c.value || 0), 0);
-
-    const incomeVal = (...patterns: string[]) =>
-      incomeBD
-        .filter((c: any) => patterns.some(p => c.name?.toUpperCase().includes(p.toUpperCase())))
-        .reduce((s: number, c: any) => s + (c.value || 0), 0);
-
-    const salesCatVal = (...patterns: string[]) =>
-      salesCats
-        .filter((c: any) => patterns.some(p => c.category_name?.toUpperCase().includes(p.toUpperCase())))
-        .reduce((s: number, c: any) => s + (c.net_sales || 0), 0);
-
-    const invCatVal = (...patterns: string[]) =>
-      invByCat
-        .filter((c: any) => patterns.some(p => c.name?.toUpperCase().includes(p.toUpperCase())))
-        .reduce((s: number, c: any) => s + (c.value || 0), 0);
-
     // Helper: sum sales by revenue_type
     const salesByType = (type: string) =>
       salesCats
@@ -225,19 +204,30 @@ function DashboardContent() {
 
     const totaleRicavi = ricaviLines.reduce((s, l) => s + l.value, 0);
 
-    // ── COSTI VARIABILI ──
-    const acquistoMerce = costVal("ACQUISTO MERCE", "MERCE") + invCatVal("MERCE");
-    const moneyTransfer = costVal("MONEY TRANSFER");
-    const commNexi = costVal("COMMISSIONI NEXI", "COMMISSIONI POS", "NEXI");
+    // ── COSTI OPERATIVI (tutti i costi tranne personale) ──
+    // Raccogliamo ogni voce dal cost_breakdown direttamente
+    const costiOpLines: { label: string; value: number; icon: React.ReactNode }[] = [];
 
-    const costiVariabiliLines = [
-      { label: "Acquisto Merce", value: acquistoMerce, icon: <Package size={14} /> },
-      { label: "Uscite Money Transfer", value: moneyTransfer, icon: <Banknote size={14} /> },
-      { label: "Commissioni NEXI/POS", value: commNexi, icon: <CreditCard size={14} /> },
-    ].filter(l => l.value > 0);
+    // 1) Ogni voce del cost_breakdown (banca + amex già uniti nel backend)
+    for (const c of costBD) {
+      if (!c.name || !c.value) continue;
+      costiOpLines.push({ label: c.name, value: c.value, icon: <ClipboardList size={14} /> });
+    }
 
-    const totaleCostiVariabili = costiVariabiliLines.reduce((s, l) => s + l.value, 0);
-    const margineLordo = totaleRicavi - totaleCostiVariabili;
+    // 2) Fatture fornitori per categoria
+    for (const c of invByCat) {
+      if (!c.name || !c.value) continue;
+      costiOpLines.push({ label: `Fattura: ${c.name}`, value: c.value, icon: <Receipt size={14} /> });
+    }
+
+    // Ordina per valore decrescente e filtra zeri
+    const costiOperativiLines = costiOpLines
+      .filter(l => l.value > 0)
+      .sort((a, b) => b.value - a.value);
+
+    const totaleCostiOperativi = costiOperativiLines.reduce((s, l) => s + l.value, 0);
+    const margineDopoOperativi = totaleRicavi - totaleCostiOperativi;
+    const margineLordoPct = totaleRicavi > 0 ? (margineDopoOperativi / totaleRicavi) * 100 : 0;
 
     // ── PERSONALE ──
     const stipendiTFR = (pa.total_gross || 0) + (pa.total_tfr || 0);
@@ -246,90 +236,11 @@ function DashboardContent() {
     ].filter(l => l.value > 0);
 
     const totalePersonale = personaleLines.reduce((s, l) => s + l.value, 0);
-    const margineDopoPersonale = margineLordo - totalePersonale;
-
-    // ── COSTI FISSI ──
-    const affitto = costVal("AFFITTO");
-    const energia = costVal("ENERGIA", "ELETTRICA");
-    const acqua = costVal("ACQUA");
-    const commercialista = costVal("COMMERCIALISTA");
-    const tari = costVal("TARI", "RIFIUTI");
-    const canoneRAI = costVal("CANONE RAI", "RAI");
-    const internet = costVal("INTERNET");
-
-    const costiFissiLines = [
-      { label: "Affitto", value: affitto, icon: <Building2 size={14} /> },
-      { label: "Energia Elettrica", value: energia, icon: <Landmark size={14} /> },
-      { label: "Acqua", value: acqua, icon: <Landmark size={14} /> },
-      { label: "Commercialista", value: commercialista, icon: <ClipboardList size={14} /> },
-      { label: "TARI (Rifiuti)", value: tari, icon: <ClipboardList size={14} /> },
-      { label: "Canone RAI", value: canoneRAI, icon: <ClipboardList size={14} /> },
-      { label: "Internet", value: internet, icon: <Landmark size={14} /> },
-    ].filter(l => l.value > 0);
-
-    const totaleCostiFissi = costiFissiLines.reduce((s, l) => s + l.value, 0);
-    const margineDopoFissi = margineDopoPersonale - totaleCostiFissi;
-
-    // ── COSTI OPERATIVI ──
-    const abbonamenti = costVal("ABBONAMENTI");
-    const pulizia = costVal("PULIZIA", "IGIENE");
-    const cancelleria = costVal("CANCELLERIA");
-    const riparazioni = costVal("RIPARAZIONI", "RICAMBI");
-    const byAirTicket = costVal("BY AIR TICKET");
-    const baluwo = costVal("BALUWO");
-    const altreCostiOp = costVal("ALTRE SPESE");
-
-    const costiOperativiLines = [
-      { label: "Abbonamenti Vari", value: abbonamenti, icon: <ClipboardList size={14} /> },
-      { label: "Pulizia e Igiene", value: pulizia, icon: <ClipboardList size={14} /> },
-      { label: "Cancelleria", value: cancelleria, icon: <ClipboardList size={14} /> },
-      { label: "Riparazioni e Ricambi", value: riparazioni, icon: <ClipboardList size={14} /> },
-      { label: "By Air Ticket", value: byAirTicket, icon: <ClipboardList size={14} /> },
-      { label: "Baluwo", value: baluwo, icon: <Banknote size={14} /> },
-      { label: "Altre Spese", value: altreCostiOp, icon: <ClipboardList size={14} /> },
-    ].filter(l => l.value > 0);
-
-    const totaleCostiOperativi = costiOperativiLines.reduce((s, l) => s + l.value, 0);
-    const ebitda = margineDopoFissi - totaleCostiOperativi;
-
-    // ── COSTI FINANZIARI ──
-    const speseBancarie = costVal("SPESE BANCARIE");
-    const costiFinLines = [
-      { label: "Spese Bancarie", value: speseBancarie, icon: <Landmark size={14} /> },
-    ].filter(l => l.value > 0);
-
-    // Add any remaining cost_breakdown items not already accounted for
-    const usedPatterns = [
-      "ACQUISTO MERCE", "MERCE", "MONEY TRANSFER", "COMMISSIONI NEXI", "COMMISSIONI POS", "NEXI",
-      "AFFITTO", "ENERGIA", "ELETTRICA", "ACQUA", "COMMERCIALISTA", "TARI", "RIFIUTI", "CANONE RAI", "RAI", "INTERNET",
-      "ABBONAMENTI", "PULIZIA", "IGIENE", "CANCELLERIA", "RIPARAZIONI", "RICAMBI", "BY AIR TICKET", "BALUWO", "ALTRE SPESE",
-      "SPESE BANCARIE", "NON CLASSIFICATO",
-    ];
-    const residualCosts = costBD
-      .filter((c: any) => !usedPatterns.some(p => (c.name || "").toUpperCase().includes(p)))
-      .reduce((s: number, c: any) => s + (c.value || 0), 0);
-
-    if (residualCosts > 0) {
-      costiFinLines.push({ label: "Altri costi", value: residualCosts, icon: <ClipboardList size={14} /> });
-    }
-
-    // Invoices not classified as Merce
-    const invAltro = invByCat
-      .filter((c: any) => !(c.name || "").toUpperCase().includes("MERCE"))
-      .reduce((s: number, c: any) => s + (c.value || 0), 0);
-    if (invAltro > 0) {
-      costiFinLines.push({ label: "Fatture Fornitori (Altro)", value: invAltro, icon: <Receipt size={14} /> });
-    }
-
-    const totaleCostiFinanziari = costiFinLines.reduce((s, l) => s + l.value, 0);
-    const risultatoNetto = ebitda - totaleCostiFinanziari;
+    const risultatoNetto = margineDopoOperativi - totalePersonale;
 
     // ── TOTALI ──
-    const totaleCosti = totaleCostiVariabili + totalePersonale + totaleCostiFissi + totaleCostiOperativi + totaleCostiFinanziari;
-
-    // ── KPI STRATEGICI ──
-    const margineLordoPct = totaleRicavi > 0 ? (margineLordo / totaleRicavi) * 100 : 0;
-    const ebitdaPct = totaleRicavi > 0 ? (ebitda / totaleRicavi) * 100 : 0;
+    const totaleCosti = totaleCostiOperativi + totalePersonale;
+    const ebitdaPct = totaleRicavi > 0 ? (risultatoNetto / totaleRicavi) * 100 : 0;
     const fatturatoPerDip = pa.employee_count > 0 ? (sa.total_net_sales || 0) / pa.employee_count : 0;
     const totalUsciteMese = ba.total_out || 0;
     const cashBurn = totalUsciteMese / 26;
@@ -338,11 +249,8 @@ function DashboardContent() {
     return {
       sections: [
         { title: "RICAVI", color: "emerald", lines: ricaviLines, subtotal: totaleRicavi, subtotalLabel: "TOTALE RICAVI" },
-        { title: "COSTI VARIABILI", color: "red", lines: costiVariabiliLines, subtotal: totaleCostiVariabili, subtotalLabel: "Totale Costi Variabili", margin: margineLordo, marginLabel: "MARGINE LORDO", marginPct: margineLordoPct },
-        { title: "PERSONALE", color: "amber", lines: personaleLines, subtotal: totalePersonale, subtotalLabel: "Totale Personale", margin: margineDopoPersonale, marginLabel: "MARGINE DOPO PERSONALE" },
-        { title: "COSTI FISSI", color: "red", lines: costiFissiLines, subtotal: totaleCostiFissi, subtotalLabel: "Totale Costi Fissi", margin: margineDopoFissi, marginLabel: "MARGINE DOPO FISSI" },
-        { title: "COSTI OPERATIVI", color: "orange", lines: costiOperativiLines, subtotal: totaleCostiOperativi, subtotalLabel: "Totale Costi Operativi", margin: ebitda, marginLabel: "EBITDA", marginPct: ebitdaPct },
-        { title: "COSTI FINANZIARI", color: "red", lines: costiFinLines, subtotal: totaleCostiFinanziari, subtotalLabel: "Totale Costi Finanziari", margin: risultatoNetto, marginLabel: "RISULTATO NETTO" },
+        { title: "COSTI OPERATIVI", color: "red", lines: costiOperativiLines, subtotal: totaleCostiOperativi, subtotalLabel: "Totale Costi Operativi", margin: margineDopoOperativi, marginLabel: "MARGINE OPERATIVO", marginPct: margineLordoPct },
+        { title: "PERSONALE", color: "amber", lines: personaleLines, subtotal: totalePersonale, subtotalLabel: "Totale Personale", margin: risultatoNetto, marginLabel: "RISULTATO NETTO", marginPct: ebitdaPct },
       ],
       totaleRicavi,
       totaleCosti,
