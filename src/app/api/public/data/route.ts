@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
       sb.from("sales_by_category").select("period").eq("client_id", clientId).order("period", { ascending: false }).limit(1).single(),
       sb.from("bank_transactions").select("period").eq("client_id", clientId).order("period", { ascending: false }).limit(1).single(),
       sb.from("payroll").select("period").eq("client_id", clientId).order("period", { ascending: false }).limit(1).single(),
+      sb.from("rent_entries").select("period").eq("client_id", clientId).order("period", { ascending: false }).limit(1).single(),
     ];
     const results = await Promise.all(queries);
     const periods = results.map((r) => r.data?.period).filter(Boolean) as string[];
@@ -72,6 +73,9 @@ export async function GET(request: NextRequest) {
     { data: invoicesData },
     { data: prevInvoices },
     { data: allInvoicePeriods },
+    { data: rentEntries },
+    { data: prevRentEntries },
+    { data: allRentPeriods },
   ] = await Promise.all([
     sb.from("monthly_summary").select("*").eq("client_id", clientId).eq("period", period).single(),
     sb.from("sales_by_category").select("*").eq("client_id", clientId).eq("period", period).order("net_sales", { ascending: false }),
@@ -91,6 +95,9 @@ export async function GET(request: NextRequest) {
     sb.from("invoices").select("*").eq("client_id", clientId).eq("period", period).order("supplier_name", { ascending: true }),
     sb.from("invoices").select("amount").eq("client_id", clientId).eq("period", prevPeriod),
     sb.from("invoices").select("period").eq("client_id", clientId),
+    sb.from("rent_entries").select("*").eq("client_id", clientId).eq("period", period).order("created_at", { ascending: true }),
+    sb.from("rent_entries").select("amount").eq("client_id", clientId).eq("period", prevPeriod),
+    sb.from("rent_entries").select("period").eq("client_id", clientId),
   ]);
 
   // Available periods
@@ -100,6 +107,7 @@ export async function GET(request: NextRequest) {
   (allBankPeriods || []).forEach((s: any) => periodSet.add(s.period));
   (allPayrollPeriods || []).forEach((s: any) => periodSet.add(s.period));
   (allInvoicePeriods || []).forEach((s: any) => periodSet.add(s.period));
+  (allRentPeriods || []).forEach((s: any) => periodSet.add(s.period));
   const availablePeriods = Array.from(periodSet).sort().reverse();
 
   // Sales aggregates
@@ -218,6 +226,10 @@ export async function GET(request: NextRequest) {
     invBySupplier[key] = (invBySupplier[key] || 0) + (inv.amount || 0);
   }
 
+  // Rent aggregates
+  const rentTotal = (rentEntries || []).reduce((s: number, r: any) => s + (r.amount || 0), 0);
+  const prevRentTotal = (prevRentEntries || []).reduce((s: number, r: any) => s + (r.amount || 0), 0);
+
   // Percentage changes
   const pctChange = (curr: number, prev: number) => prev ? ((curr - prev) / Math.abs(prev)) * 100 : null;
 
@@ -229,6 +241,7 @@ export async function GET(request: NextRequest) {
     bank_out: pctChange(ba.total_out, prevBa.total_out),
     amex: pctChange(amexAgg.total_charges, prevAmexTotal),
     invoices: pctChange(invTotal, prevInvTotal),
+    rent: pctChange(rentTotal, prevRentTotal),
   };
 
   // Incidence ratios
@@ -270,6 +283,11 @@ export async function GET(request: NextRequest) {
       by_category: Object.entries(invByCategory).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value),
       by_supplier: Object.entries(invBySupplier).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value),
     },
+    rentals: {
+      data: rentEntries || [],
+      total: rentTotal,
+      count: (rentEntries || []).length,
+    },
     trends: { monthly: allSummaries || [] },
     changes,
     incidence,
@@ -278,6 +296,7 @@ export async function GET(request: NextRequest) {
       total_spese_banca: Object.values(costBreakdown).reduce((s, v) => s + v, 0),
       total_spese_amex: amexAgg.total_charges,
       total_fatture: invTotal,
+      total_affitto: rentTotal,
     },
   });
 }

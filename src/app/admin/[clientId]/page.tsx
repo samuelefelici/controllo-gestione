@@ -33,6 +33,14 @@ interface ImportBatch {
   undone_at: string | null;
 }
 
+interface RentEntry {
+  id: string;
+  period: string;
+  amount: number;
+  notes: string;
+  created_at: string;
+}
+
 const FILE_TYPES = [
   { id: "sales_by_category", label: "Vendite per Categoria", desc: "PDF export da POS (es. Erply)", icon: "📊", accept: ".pdf" },
   { id: "bank_movements", label: "Movimenti Bancari", desc: "PDF Lista Movimenti dalla banca", icon: "🏦", accept: ".pdf" },
@@ -82,6 +90,16 @@ export default function ClientManagePage() {
   const [suppliers, setSuppliers] = useState<string[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
 
+  // Rent manual entry state
+  const [rentEntries, setRentEntries] = useState<RentEntry[]>([]);
+  const [rentPeriod, setRentPeriod] = useState(period);
+  const [rentAmount, setRentAmount] = useState<string>("");
+  const [rentNotes, setRentNotes] = useState("");
+  const [rentLoading, setRentLoading] = useState(false);
+  const [rentSaving, setRentSaving] = useState(false);
+  const [rentDeletingId, setRentDeletingId] = useState<string | null>(null);
+  const [editingRentId, setEditingRentId] = useState<string | null>(null);
+
   // Bank categories state
   const [bankCategories, setBankCategories] = useState<string[]>([]);
 
@@ -110,7 +128,13 @@ export default function ClientManagePage() {
     loadShareToken();
     loadSuppliersAndCategories();
     loadBankCategories();
+    loadRentEntries(period);
   }, [clientId]);
+
+  useEffect(() => {
+    setRentPeriod(period);
+    loadRentEntries(period);
+  }, [period, clientId]);
 
   async function loadClientInfo() {
     setLoading(true);
@@ -159,6 +183,20 @@ export default function ClientManagePage() {
     if (res.ok) {
       const d = await res.json();
       setBankCategories((d.categories || []).map((c: any) => c.name));
+    }
+  }
+
+  async function loadRentEntries(p?: string) {
+    const targetPeriod = p || period;
+    setRentLoading(true);
+    try {
+      const res = await fetch(`/api/rent-entries?client_id=${clientId}&period=${targetPeriod}`);
+      if (res.ok) {
+        const d = await res.json();
+        setRentEntries(d.entries || []);
+      }
+    } finally {
+      setRentLoading(false);
     }
   }
 
@@ -541,6 +579,80 @@ export default function ClientManagePage() {
     }
   }
 
+  /* --- Rent Manual Entry --- */
+
+  function resetRentForm() {
+    setEditingRentId(null);
+    setRentPeriod(period);
+    setRentAmount("");
+    setRentNotes("");
+  }
+
+  async function saveRentEntry() {
+    if (!rentPeriod || !rentAmount) {
+      alert("Inserisci mese e importo dell'affitto.");
+      return;
+    }
+
+    const amountNum = Number(rentAmount);
+    if (!Number.isFinite(amountNum) || amountNum <= 0) {
+      alert("L'importo deve essere un numero positivo.");
+      return;
+    }
+
+    setRentSaving(true);
+    try {
+      const isEdit = !!editingRentId;
+      const res = await fetch("/api/rent-entries", {
+        method: isEdit ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          isEdit
+            ? { id: editingRentId, period: rentPeriod, amount: amountNum, notes: rentNotes }
+            : { client_id: clientId, period: rentPeriod, amount: amountNum, notes: rentNotes }
+        ),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        resetRentForm();
+        await loadRentEntries(period);
+      } else {
+        alert("Errore: " + (data.error || "Salvataggio affitto fallito"));
+      }
+    } catch (err: any) {
+      alert("Errore: " + err.message);
+    } finally {
+      setRentSaving(false);
+    }
+  }
+
+  function editRentEntry(entry: RentEntry) {
+    setEditingRentId(entry.id);
+    setRentPeriod(entry.period);
+    setRentAmount(String(entry.amount || ""));
+    setRentNotes(entry.notes || "");
+  }
+
+  async function deleteRentEntry(id: string) {
+    if (!confirm("Vuoi eliminare questo inserimento di affitto?")) return;
+    setRentDeletingId(id);
+    try {
+      const res = await fetch(`/api/rent-entries?id=${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        if (editingRentId === id) resetRentForm();
+        await loadRentEntries(period);
+      } else {
+        alert("Errore: " + (data.error || "Eliminazione fallita"));
+      }
+    } catch (err: any) {
+      alert("Errore: " + err.message);
+    } finally {
+      setRentDeletingId(null);
+    }
+  }
+
   /* --- Confirm Import --- */
 
   async function confirmImport() {
@@ -833,6 +945,120 @@ export default function ClientManagePage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {!preview && !parsing && (
+              <div className="mt-6 rounded-xl border border-slate-800 bg-slate-900/50 p-6">
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <div>
+                    <h3 className="font-semibold text-white text-base">🏠 Affitto (manuale)</h3>
+                    <p className="text-xs text-slate-500 mt-1">Inserisci canone, mese di riferimento e note. Puoi modificare o eliminare ogni riga.</p>
+                  </div>
+                  <span className="text-xs text-slate-500 font-mono">Totale mese: €{rentEntries.reduce((s, r) => s + (r.amount || 0), 0).toFixed(2)}</span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+                  <div>
+                    <label className="block text-[11px] text-slate-500 mb-1">Mese</label>
+                    <input
+                      type="month"
+                      value={rentPeriod}
+                      onChange={(e) => setRentPeriod(e.target.value)}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm font-mono focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-500 mb-1">Importo €</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={rentAmount}
+                      onChange={(e) => setRentAmount(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm font-mono focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-[11px] text-slate-500 mb-1">Note</label>
+                    <input
+                      type="text"
+                      value={rentNotes}
+                      onChange={(e) => setRentNotes(e.target.value)}
+                      placeholder="es. Canone locale principale"
+                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 mb-4">
+                  <button
+                    onClick={saveRentEntry}
+                    disabled={rentSaving}
+                    className="px-4 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {rentSaving ? "Salvataggio..." : editingRentId ? "✓ Aggiorna Affitto" : "+ Aggiungi Affitto"}
+                  </button>
+                  {editingRentId && (
+                    <button
+                      onClick={resetRentForm}
+                      className="px-4 py-2 text-sm font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
+                    >
+                      Annulla modifica
+                    </button>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-slate-800 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-slate-800/70">
+                          <th className="px-3 py-2 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Mese</th>
+                          <th className="px-3 py-2 text-right text-xs font-semibold text-slate-400 uppercase tracking-wider">Importo</th>
+                          <th className="px-3 py-2 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Note</th>
+                          <th className="px-3 py-2 w-28" />
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/50">
+                        {rentLoading ? (
+                          <tr>
+                            <td colSpan={4} className="px-3 py-6 text-center text-slate-500 text-sm">Caricamento affitti...</td>
+                          </tr>
+                        ) : rentEntries.length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="px-3 py-6 text-center text-slate-500 text-sm">Nessun affitto inserito per il periodo selezionato</td>
+                          </tr>
+                        ) : (
+                          rentEntries.map((entry) => (
+                            <tr key={entry.id} className="hover:bg-slate-800/30">
+                              <td className="px-3 py-2 text-slate-300 font-mono">{entry.period}</td>
+                              <td className="px-3 py-2 text-right text-rose-400 font-mono font-semibold">€{Number(entry.amount || 0).toFixed(2)}</td>
+                              <td className="px-3 py-2 text-slate-500">{entry.notes || "—"}</td>
+                              <td className="px-3 py-2">
+                                <div className="flex items-center justify-end gap-1">
+                                  <button
+                                    onClick={() => editRentEntry(entry)}
+                                    className="px-2 py-1 text-xs text-sky-400 hover:text-sky-300 bg-sky-950/30 hover:bg-sky-950/50 rounded transition-colors"
+                                  >
+                                    Modifica
+                                  </button>
+                                  <button
+                                    onClick={() => deleteRentEntry(entry.id)}
+                                    disabled={rentDeletingId === entry.id}
+                                    className="px-2 py-1 text-xs text-red-400 hover:text-red-300 bg-red-950/30 hover:bg-red-950/50 rounded transition-colors disabled:opacity-50"
+                                  >
+                                    {rentDeletingId === entry.id ? "..." : "Elimina"}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             )}
 

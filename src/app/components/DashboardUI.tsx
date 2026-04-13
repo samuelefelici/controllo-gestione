@@ -145,6 +145,7 @@ export default function DashboardUI({ data, loading, error, period, setPeriod, s
     const incomeBD = data.bank?.income_breakdown || [];
     const salesCats = data.sales?.data || [];
     const invByCat = data.invoices?.by_category || [];
+    const rentEntries = data.rentals?.data || [];
 
     const revenueTypeLabels: Record<string, { label: string; icon: React.ReactNode }> = {
       VENDITA_PRODOTTI: { label: "Vendita Prodotti", icon: <ShoppingCart size={14} /> },
@@ -187,6 +188,10 @@ export default function DashboardUI({ data, loading, error, period, setPeriod, s
     for (const c of invByCat) {
       if (!c.name || !c.value) continue;
       costiOpLines.push({ label: `Fattura: ${c.name}`, value: c.value, icon: <Receipt size={14} /> });
+    }
+    for (const r of rentEntries) {
+      if (!r.amount) continue;
+      costiOpLines.push({ label: `Affitto ${periodLabel(r.period)}`, value: r.amount, icon: <Building2 size={14} /> });
     }
     const costiOperativiLines = costiOpLines.filter(l => l.value > 0).sort((a, b) => b.value - a.value);
     const totaleCostiOperativi = costiOperativiLines.reduce((s, l) => s + l.value, 0);
@@ -381,7 +386,8 @@ export default function DashboardUI({ data, loading, error, period, setPeriod, s
         {tab === "overview" && pnl && (() => {
           const cbTotal = (data.bank?.cost_breakdown || []).reduce((s: number, c: any) => s + (c.value || 0), 0);
           const invTotal = data.invoices?.total || 0;
-          const costiOpTot = cbTotal + invTotal;
+          const rentTotal = data.rentals?.total || 0;
+          const costiOpTot = cbTotal + invTotal + rentTotal;
           const personaleTot = comp.total_costi_personale || 0;
           const costiTotMese = costiOpTot + personaleTot;
 
@@ -515,6 +521,7 @@ export default function DashboardUI({ data, loading, error, period, setPeriod, s
                       const pieItems = [
                         { name: "Costi Operativi", value: cbTotal, color: "#ef4444" },
                         { name: "Fatture Fornitori", value: invTotal, color: "#f97316" },
+                        { name: "Affitto", value: rentTotal, color: "#f43f5e" },
                         { name: "Personale", value: personaleTot, color: "#f59e0b" },
                       ].filter(p => p.value > 0);
                       return (
@@ -533,6 +540,7 @@ export default function DashboardUI({ data, loading, error, period, setPeriod, s
                     {[
                       { label: "Costi Operativi", value: cbTotal, pct: costiTotMese > 0 ? (cbTotal / costiTotMese * 100) : 0, color: "#ef4444" },
                       { label: "Fatture Fornitori", value: invTotal, pct: costiTotMese > 0 ? (invTotal / costiTotMese * 100) : 0, color: "#f97316" },
+                      { label: "Affitto", value: rentTotal, pct: costiTotMese > 0 ? (rentTotal / costiTotMese * 100) : 0, color: "#f43f5e" },
                       { label: "Personale (lordo + TFR)", value: personaleTot, pct: costiTotMese > 0 ? (personaleTot / costiTotMese * 100) : 0, color: "#f59e0b" },
                     ].map((item, i) => (
                       <div key={i} className="flex items-center gap-3">
@@ -692,12 +700,14 @@ export default function DashboardUI({ data, loading, error, period, setPeriod, s
             {(() => {
               const cbTotal = (data.bank?.cost_breakdown || []).reduce((s: number, c: any) => s + (c.value || 0), 0);
               const invTotal = data.invoices?.total || 0;
-              const costiTotali = cbTotal + invTotal + (comp.total_costi_personale || 0);
+              const rentTotal = data.rentals?.total || 0;
+              const costiTotali = cbTotal + invTotal + rentTotal + (comp.total_costi_personale || 0);
               return (
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
                   <KPI icon={<Users size={18} />} label="Personale" value={fmt(comp.total_costi_personale || 0)} sub={`${(inc.staff_on_sales || 0).toFixed(1)}% del fatturato`} color="text-amber-400" />
                   <KPI icon={<Landmark size={18} />} label="Costi Operativi" value={fmt(cbTotal)} color="text-red-400" />
                   <KPI icon={<Receipt size={18} />} label="Fatture Fornitori" value={fmt(invTotal)} sub={`${data.invoices?.count || 0} fatture`} change={ch.invoices} color="text-orange-400" />
+                  <KPI icon={<Building2 size={18} />} label="Affitto" value={fmt(rentTotal)} sub={`${data.rentals?.count || 0} inserimenti`} change={ch.rent} color="text-rose-400" />
                   <KPI icon={<BarChart3 size={18} />} label="Costi Totali" value={fmt(costiTotali)} color="text-red-500" />
                 </div>
               );
@@ -821,6 +831,35 @@ export default function DashboardUI({ data, loading, error, period, setPeriod, s
                           <td className="p-3"><span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[10px]">{inv.category_name || "—"}</span></td>
                           <td className="p-3 text-right font-mono font-semibold text-orange-400">{fmt2(inv.amount)}</td>
                           <td className="p-3 text-slate-500 max-w-[200px] truncate">{inv.notes || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            )}
+
+            {data.rentals?.data?.length > 0 && (
+              <Card className="overflow-hidden">
+                <div className="px-5 py-3 border-b border-slate-800/60 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-white">Dettaglio Affitto</h3>
+                  <span className="text-xs text-slate-500 font-mono">{data.rentals.count} inserimenti · {fmt(data.rentals.total)}</span>
+                </div>
+                <div className="max-h-[300px] overflow-y-auto">
+                  <table className="w-full text-xs">
+                    <thead className="sticky top-0 bg-slate-900">
+                      <tr className="border-b border-slate-800 text-slate-500">
+                        <th className="text-left p-3 font-medium">Mese</th>
+                        <th className="text-right p-3 font-medium">Importo</th>
+                        <th className="text-left p-3 font-medium">Note</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.rentals.data.map((r: any, i: number) => (
+                        <tr key={i} className="border-b border-slate-800/20 hover:bg-slate-800/20">
+                          <td className="p-3 text-slate-300 font-medium">{periodLabel(r.period)}</td>
+                          <td className="p-3 text-right font-mono font-semibold text-rose-400">{fmt2(r.amount)}</td>
+                          <td className="p-3 text-slate-500 max-w-[280px] truncate">{r.notes || "—"}</td>
                         </tr>
                       ))}
                     </tbody>

@@ -11,6 +11,7 @@ DROP TABLE IF EXISTS file_uploads CASCADE;
 DROP TABLE IF EXISTS payroll CASCADE;
 DROP TABLE IF EXISTS amex_transactions CASCADE;
 DROP TABLE IF EXISTS bank_transactions CASCADE;
+DROP TABLE IF EXISTS rent_entries CASCADE;
 DROP TABLE IF EXISTS sales_by_category CASCADE;
 DROP TABLE IF EXISTS expense_lines CASCADE;
 DROP TABLE IF EXISTS revenue_lines CASCADE;
@@ -284,6 +285,21 @@ CREATE TABLE invoices (
 
 CREATE INDEX idx_invoices_client_period ON invoices(client_id, period);
 CREATE INDEX idx_invoices_batch ON invoices(import_batch_id);
+
+-- ══════════════════════════════════════════════════════════════
+-- 8f. Rent entries (affitto manuale)
+-- ══════════════════════════════════════════════════════════════
+
+CREATE TABLE rent_entries (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  period TEXT NOT NULL,
+  amount NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+  notes TEXT DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX idx_rent_entries_client_period ON rent_entries(client_id, period);
 
 -- ══════════════════════════════════════════════════════════════
 -- 9. TRIGGERS
