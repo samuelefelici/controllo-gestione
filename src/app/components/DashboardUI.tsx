@@ -985,7 +985,6 @@ export default function DashboardUI({ data, loading, error, period, setPeriod, s
           const cbData: {name: string; value: number}[] = data.bank?.cost_breakdown || [];
           const axData: {name: string; value: number}[] = data.amex?.by_category || [];
 
-          const totalIb = ibData.reduce((s, b) => s + (b.value || 0), 0);
           const totalCb = cbData.reduce((s, b) => s + (b.value || 0), 0);
           const totalAx = axData.reduce((s, b) => s + (b.value || 0), 0);
           const totalAllUscite = totalCb + totalAx;
@@ -1000,38 +999,7 @@ export default function DashboardUI({ data, loading, error, period, setPeriod, s
               <KPI icon={<Landmark size={18} />} label="Saldo Finale" value={fmt(ba.closing_balance || 0)} color={((ba.closing_balance || 0) >= (ba.opening_balance || 0)) ? "text-emerald-400" : "text-red-400"} />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <Card className="p-5">
-                <h3 className="text-sm font-semibold text-emerald-400 mb-3 flex items-center gap-1.5"><ArrowDownToLine size={14} /> Entrate per Causale</h3>
-                <div className="space-y-2.5">
-                  {ibData.filter((b: any) => b.value > 0).slice(0, 8).map((item: any, i: number) => {
-                    const pct = totalIb > 0 ? (item.value / totalIb) * 100 : 0;
-                    return (
-                      <div key={i}
-                        onClick={() => setActiveFilter(activeFilter?.type === "causale" && activeFilter.value === item.name ? null : { type: "causale", value: item.name })}
-                        className={`cursor-pointer rounded-lg px-2 py-1.5 -mx-2 transition ${
-                          activeFilter?.type === "causale" && activeFilter.value === item.name
-                            ? "bg-sky-950/50 ring-1 ring-sky-500/30"
-                            : activeFilter?.type === "causale" ? "opacity-40 hover:opacity-70" : "hover:bg-slate-800/40"
-                        }`}>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs text-slate-400 truncate flex-1">{item.name}</span>
-                          <span className="text-xs font-mono text-emerald-400 ml-2">{fmt(item.value)}</span>
-                          <span className="text-[10px] text-slate-600 ml-1.5 w-10 text-right">{pct.toFixed(0)}%</span>
-                        </div>
-                        <div className="h-1 rounded-full bg-slate-800 overflow-hidden">
-                          <div className="h-full bg-emerald-500/60 rounded-full transition-all" style={{ width: `${pct}%` }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <div className="flex justify-between pt-2 border-t border-slate-800/60">
-                    <span className="text-xs font-semibold text-slate-300">Totale</span>
-                    <span className="text-xs font-mono font-semibold text-emerald-400">{fmt(totalIb)}</span>
-                  </div>
-                </div>
-              </Card>
-
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <Card className="p-5">
                 <h3 className="text-sm font-semibold text-red-400 mb-3 flex items-center gap-1.5"><ArrowUpFromLine size={14} /> Uscite Banca</h3>
                 <div className="space-y-2.5">
@@ -1173,7 +1141,6 @@ export default function DashboardUI({ data, loading, error, period, setPeriod, s
                       <th className="text-left p-3 font-medium">Data</th>
                       <th className="text-left p-3 font-medium">Descrizione</th>
                       <th className="text-left p-3 font-medium">Causale</th>
-                      <th className="text-left p-3 font-medium">Categoria</th>
                       <th className="text-right p-3 font-medium">Importo</th>
                       <th className="text-right p-3 font-medium">Saldo</th>
                     </tr>
@@ -1189,33 +1156,6 @@ export default function DashboardUI({ data, loading, error, period, setPeriod, s
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${tx.amount > 0 ? "bg-emerald-950 text-emerald-400" : "bg-red-950 text-red-400"}`}>
                             {tx.subcategory || tx.category}
                           </span>
-                        </td>
-                        <td className="p-3">
-                          {!isPublic && tx.amount > 0 ? (
-                            <select
-                              value={tx.income_category || ""}
-                              onChange={async (e) => {
-                                const val = e.target.value;
-                                tx.income_category = val;
-                                setData({ ...data });
-                                await fetch("/api/bank-transactions", {
-                                  method: "PATCH",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({ id: tx.id, income_category: val }),
-                                });
-                              }}
-                              className="bg-slate-800 border border-slate-700 hover:border-slate-600 focus:border-sky-500 rounded px-1.5 py-0.5 text-[10px] text-white focus:outline-none transition-colors"
-                            >
-                              <option value="">— Auto —</option>
-                              <option value="INCASSO">INCASSO</option>
-                              <option value="COMMISSIONI">COMMISSIONI</option>
-                              <option value="CONTO CORRENTE">CONTO CORRENTE</option>
-                            </select>
-                          ) : tx.amount > 0 ? (
-                            <span className="text-[10px] text-slate-400">{tx.income_category || "Auto"}</span>
-                          ) : (
-                            <span className="text-slate-600 text-[10px]">—</span>
-                          )}
                         </td>
                         <td className={`p-3 text-right font-mono font-semibold ${tx.amount > 0 ? "text-emerald-400" : "text-red-400"}`}>
                           {tx.amount > 0 ? "+" : ""}{fmt2(tx.amount)}
